@@ -303,3 +303,18 @@ p{margin:0 0 .75rem}
 .briefs--compact .brief__headline{font-size:1.0625rem;line-height:1.25;margin-bottom:.25rem}
 .briefs--compact .brief p{font-size:.875rem;line-height:1.45}
 .briefs--compact .brief .legend{display:none}
+
+/* ---------- Even grid: every story on the front page and in Business is the same size ---------- */
+.front,.business{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr));gap:1.5rem;align-items:stretch;margin-top:1.25rem}
+.briefs,.business > .side,.business > .main{display:contents}
+.front > .lead,.briefs > .brief,.business article,.business .maths{
+  border:0;border-top:3px solid var(--ink);padding:.625rem 0 0;margin:0;min-width:0}
+.lead__headline,.brief__headline,.business .story__headline,.briefs--compact .brief__headline,.maths__question{
+  font-family:var(--head);font-weight:700;font-size:1.25rem;line-height:1.2;letter-spacing:0;margin:0 0 .375rem}
+.lead .dek{font-size:.875rem;margin:0 0 .375rem}
+.lead__body{columns:1;text-align:left;hyphens:manual}
+.lead__body p:first-child::first-letter{all:unset}
+.front p,.business p,.briefs--compact .brief p{font-size:.9375rem;line-height:1.5}
+.briefs--compact .brief{padding-block:.625rem 0}
+.briefs--compact .brief .legend{display:block}
+.business .maths{background:var(--tint);padding:.625rem .875rem .875rem}
