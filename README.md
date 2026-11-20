@@ -22,6 +22,11 @@ then publishes. Once it's out it doesn't change. Old papers sit in the archive.
 Random question during the day? Dump it in the **Notebook**. Tomorrow's paper digs into it -
 with sources, not vibes.
 
+## About
+
+Side project. Python, Flask and SQLite, with Claude doing the reading and writing. No roadmap,
+no promises - I use it every morning and fix whatever annoys me.
+
 ## Running it
 
 Refer to [CLAUDE.md](CLAUDE.md).
