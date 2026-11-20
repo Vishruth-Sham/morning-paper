@@ -178,4 +178,87 @@ def prompt(R, slot: dict) -> dict:
     return {"items": [{"kind": "prompt", "text": fallback}]} if fallback else {"items": []}
 
 
-KINDS = {"tasks": tasks, "weather": weather, "markets": markets, "prompt": prompt}
+# ---------------------------------------------------------------------------- business concept + real case
+
+
+def concept(R, slot: dict) -> dict:
+    """One business concept a day, explained through a real company in the news.
+
+    The slot lists concepts as {"name": ..., "search": optional news query}. The definition comes from
+    Wikipedia, the case from a recent news story; the writer only uses what was fetched."""
+    concepts = slot.get("concepts") or []
+    if not concepts:
+        return {"items": []}
+    c = concepts[R.day.toordinal() % len(concepts)]
+    name = c["name"] if isinstance(c, dict) else str(c)
+    query = (c.get("search") if isinstance(c, dict) else None) or f'"{name}" company'
+    R.step(f"Concept of the day: {name}")
+
+    wiki = None
+    try:
+        wiki = (fetchers.fetch_wikipedia(c.get("wikipedia") or name, limit=1) or [None])[0]
+    except (fetchers.FetchError, KeyError, ValueError) as e:
+        R.warn(f"Concept {name}: Wikipedia unavailable ({e})")
+    cases = []
+    try:
+        url = f"https://news.google.com/rss/search?q={fetchers.quote_plus(query)}+when:30d&hl=en-IN&gl=IN&ceid=IN:en"
+        cases = fetchers.fetch_gnews(url, limit=12)
+    except fetchers.FetchError as e:
+        R.warn(f"Concept {name}: no news cases ({e})")
+    if not wiki and not cases:
+        return {"items": []}
+
+    item = {"kind": "concept", "concept": name, "headline": name, "explanation": "", "case_headline": "",
+            "case_story": "", "takeaway": "", "url": wiki["url"] if wiki else "", "publisher": "Wikipedia" if wiki else "",
+            "case_url": "", "case_publisher": "", "case_published_at": None}
+    pick = cases[0] if cases else None
+    if R.llm.available and cases:
+        listing = [{"id": i, "title": x["title"], "publisher": x["publisher"]} for i, x in enumerate(cases)]
+        schema = {"type": "object", "properties": {"id": {"type": "integer"}}, "required": ["id"], "additionalProperties": False}
+        try:
+            got = R.llm.json("You pick news stories that show a business concept at work in a real company.",
+                             f"Concept: {name}\nPick the story that most clearly shows this concept in one named company. "
+                             f"Prefer concrete numbers.\n{listing}", schema, max_tokens=300, effort="low")
+            if 0 <= got.get("id", -1) < len(cases):
+                pick = cases[got["id"]]
+        except (LLMUnavailable, KeyError, ValueError) as e:
+            R.warn(f"Concept {name}: picked the newest case ({e})")
+    article = ""
+    if pick:
+        try:
+            art = fetchers.fetch_article(pick["url"])
+            article = (art.get("text") or art.get("description") or "")[:6000]
+            if art.get("url"):
+                pick["url"] = art["url"]
+        except Exception:  # noqa: BLE001 - the headline alone still works
+            pass
+        item.update(case_headline=pick["title"], case_url=pick["url"], case_publisher=pick["publisher"],
+                    case_published_at=pick.get("published_at"))
+
+    if R.llm.available:
+        schema = {"type": "object", "properties": {
+            "headline": {"type": "string"}, "explanation": {"type": "string"},
+            "case_story": {"type": "string"}, "takeaway": {"type": "string"}},
+            "required": ["headline", "explanation", "case_story", "takeaway"], "additionalProperties": False}
+        try:
+            out = R.llm.json(
+                "You explain one business concept a day to a curious reader, then show it in a real company. Plain words, "
+                "short sentences, numbers where the source has them. Use only the material given; never invent figures.",
+                f"Concept: {name}\nDefinition source (Wikipedia):\n{(wiki or {}).get('text', '')[:3000]}\n\n"
+                f"Real case: {item['case_headline']} ({item['case_publisher']})\n{article}\n\n"
+                f"Reader's goals: {R.profile['goals']}\n\n"
+                "headline: 'Concept, via Company' style, under 10 words. explanation: what the concept is and why it "
+                "matters, under 70 words. case_story: how it shows up in this company, under 90 words, only facts from the "
+                "case text. takeaway: one sentence the reader can use when sizing up a business.",
+                schema, max_tokens=1500, effort="medium")
+            item.update({k: out[k].strip() for k in schema["required"]})
+            return {"items": [item]}
+        except (LLMUnavailable, KeyError, ValueError) as e:
+            R.warn(f"Concept {name}: written without AI ({e})")
+    if wiki:
+        sentences = re.split(r"(?<=[.!?])\s+", wiki.get("text", ""))
+        item["explanation"] = " ".join(sentences[:2])
+    return {"items": [item]}
+
+
+KINDS = {"tasks": tasks, "weather": weather, "markets": markets, "prompt": prompt, "concept": concept}

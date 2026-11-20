@@ -84,12 +84,27 @@
 {% set disc = secs.get('explainer') %}
 {% set ex_sec = secs.get('exercise') %}
 {% set long_sec = secs.get('long_read') %}
+{% set concept_sec = secs.get('concept') %}
+{% set concept_it = concept_sec['items'][0] if concept_sec and concept_sec['items'] else none %}
 {% set disc_items = disc['items'] if disc and not (lead_sec and lead_sec.id == disc.id) else [] %}
 {% set case_shown = case and not (lead_sec and lead_sec.id == case_sec.id) %}
-{% if disc_items or case_shown or (ex_sec and ex_sec['items']) or (long_sec and long_sec['items']) %}
-<div class="bar"><h2 class="bar__title">Business</h2><span class="bar__note">Discover, then the Startup Story, then Do the Maths · {{ c.reading.business_minutes }} min</span></div>
+{% if concept_it or disc_items or case_shown or (ex_sec and ex_sec['items']) or (long_sec and long_sec['items']) %}
+<div class="bar"><h2 class="bar__title">Business</h2><span class="bar__note">{% if concept_it %}The concept, then {% endif %}Discover, then the Startup Story, then Do the Maths · {{ c.reading.business_minutes }} min</span></div>
 <section class="business" aria-label="Business">
   <div class="side">
+    {% if concept_it %}
+    <article class="concept">
+      <p class="kicker">Concept of the day · {{ concept_it.concept }}</p>
+      <h3 class="story__headline">{{ concept_it.headline }}</h3>
+      {% if concept_it.explanation %}<p>{{ concept_it.explanation }}</p>{% endif %}
+      {% if concept_it.case_headline %}
+      <p><strong>The real case:</strong> {{ concept_it.case_story or concept_it.case_headline }}</p>
+      <p class="byline">{{ ext(concept_it.case_url, concept_it.case_publisher) }}{% if concept_it.case_published_at %} · {{ concept_it.case_published_at | nicedate }}{% endif %}{% if concept_it.url %} · {{ ext(concept_it.url, 'The concept on Wikipedia') }}{% endif %}</p>
+      {% elif concept_it.url %}<p class="byline">{{ ext(concept_it.url, concept_it.publisher) }}</p>{% endif %}
+      {% if concept_it.takeaway %}<p><strong>Use it:</strong> {{ concept_it.takeaway }}</p>{% endif %}
+      {% if concept_it.case_url %}{{ ext(concept_it.case_url, 'Read the case', 'more') }}{% endif %}
+    </article>
+    {% endif %}
     {% for it in disc_items %}
     <article>
       <p class="kicker">Discover{% if it.original_minutes %} · {{ it.original_minutes }} min{% endif %}</p>

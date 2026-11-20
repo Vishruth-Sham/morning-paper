@@ -297,3 +297,4 @@ p{margin:0 0 .75rem}
 .foryou__line{display:block;color:var(--ink-2);font-size:.875rem}
 .foryou__list .legend{margin:0}
 .foryou__prompt{font-family:var(--head);font-style:italic;font-size:1.0625rem;line-height:1.4;margin:0}
+.concept{padding-bottom:1rem;margin-bottom:1rem;border-bottom:1px solid var(--rule)}

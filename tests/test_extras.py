@@ -21,6 +21,8 @@ def add_extra_slots(db):
          "placement": "top", "places": ["Sampletown"]},
         {**base, "id": "day-markets", "kind": "markets", "section": "Markets", "slot": "Markets", "purpose": "",
          "placement": "top", "symbols": [{"label": "Index", "symbol": "^IDX"}], "usd_inr": False},
+        {**base, "id": "idea", "kind": "concept", "section": "Business", "slot": "Concept", "purpose": "",
+         "concepts": [{"name": "Contribution margin"}]},
         {**base, "id": "nudge", "kind": "prompt", "section": "Nudge", "slot": "Nudge", "purpose": "", "placement": "more",
          "ideas": ["Call a friend."]},
         {**base, "id": "hobby", "kind": "news", "section": "Hobby", "slot": "Hobby", "purpose": "", "placement": "more",
@@ -62,11 +64,14 @@ def test_extra_sections_render(app, monkeypatch):
     q = secs["day-markets"]["items"][0]
     assert q["value"] == 102.0 and q["change_pct"] == 2.0
     assert secs["nudge"]["items"][0]["text"] == "Call a friend."
+    con = secs["idea"]["items"][0]
+    assert con["concept"] == "Contribution margin" and con["case_url"] == "https://example.com/a"
+    assert con["explanation"].startswith("Topic is a thing.")
     assert secs["hobby"]["placement"] == "more" and secs["hobby"]["items"]
     # a "more" section never takes the lead
     assert ed["content"]["lead"]["section_id"] == "news"
     html = app.test_client().get("/edition/2026-11-21/1").get_data(as_text=True)
-    assert 'class="yourday"' in html and "Sampletown" in html and "+2.00%" in html
+    assert "Concept of the day" in html and 'class="yourday"' in html and "Sampletown" in html and "+2.00%" in html
     assert "More for you" in html and "Call a friend." in html and "New trail opens" in html
 
 
