@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% from "macros.html" import ext %}
+{% block title %}Run {{ run.id }} · The Morning Paper{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1 class="page-head__title">Run {{ run.id }}</h1>
+  <p class="page-head__note">Paper for {{ run.edition_date | longdate }} · {{ run.status }} · {{ run.message }}</p>
+</div>
+<section class="panel">
+  <p class="panel__intro">Started {{ run.started_at }}, finished {{ run.finished_at or 'not finished' }} · plan version {{ run.plan_version }} · writer: {{ run.diagnostics.llm }}{% if run.diagnostics.llm_error %} ({{ run.diagnostics.llm_error }}){% endif %}</p>
+  <h2 class="side-head">Sources</h2>
+  <div class="table-wrap">
+    <table class="table" style="min-width:48rem">
+      <thead><tr><th>Slot</th><th>Source</th><th>Method</th><th>Result</th><th>Items</th><th>Direct links</th><th>Seconds</th><th>Error</th></tr></thead>
+      <tbody>
+      {% for s in run.diagnostics.get('sources', []) %}
+      <tr><td>{{ s.slot }}</td><td>{{ ext(s.url, s.source) }}</td><td>{{ s.method }}</td>
+          <td><span class="status status--{{ {'ok': 'ok', 'fallback': 'fallback'}.get(s.status, 'failed') }}">{{ s.status }}{% if s.fallback_used %} (fallback){% endif %}</span></td>
+          <td>{{ s.count }}</td><td>{{ s.get('direct_links', '') }}</td><td>{{ s.seconds }}</td><td>{{ s.error }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <h2 class="side-head">Checks</h2>
+  <ul class="queue">{% for v in run.diagnostics.get('validation', []) %}<li>{{ v }}</li>{% else %}<li>No issues.</li>{% endfor %}</ul>
+  <h2 class="side-head">Steps</h2>
+  <ol class="steps">{% for s in run.diagnostics.get('steps', []) %}<li><span>{{ s.msg }}</span><span class="st">{{ s.at[11:19] }}</span></li>{% endfor %}</ol>
+  {% if run.diagnostics.error %}<h2 class="side-head">Error</h2><pre style="white-space:pre-wrap">{{ run.diagnostics.error }}</pre>{% endif %}
+</section>
+{% endblock %}

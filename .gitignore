@@ -1,0 +1,11 @@
+.venv/
+data/
+__pycache__/
+*.pyc
+.pytest_cache/
+build/
+*.egg-info/
+*.log
+.env
+paper/seed_local.py
+paper/seed_edition.py

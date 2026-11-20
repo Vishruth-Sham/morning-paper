@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{% block title %}The Morning Paper{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,700..900&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,700;1,8..60,400&family=Libre+Franklin:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+{% block head %}{% endblock %}
+</head>
+<body>
+<div class="page">
+  <header>
+    <nav class="topbar" aria-label="Paper">
+      {% block topbar_left %}<a href="{{ url_for('today') }}">Today's paper</a>{% endblock %}
+      <ul>
+        <li><a href="{{ url_for('archive') }}" {% if active == 'archive' %}aria-current="page"{% endif %}>Archive</a></li>
+        <li><a href="{{ url_for('notebook') }}" {% if active == 'notebook' %}aria-current="page"{% endif %}>Notebook</a></li>
+        <li><a href="{{ url_for('edit_paper') }}" {% if active == 'edit' %}aria-current="page"{% endif %}>Edit my paper</a></li>
+      </ul>
+    </nav>
+    {% block mast %}<div class="mast mast--small"><p class="mast__title"><a href="{{ url_for('today') }}">The Morning Paper</a></p></div>{% endblock %}
+    {% block folio %}{% endblock %}
+  </header>
+  <main>
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}<div class="notice" role="status">{% for m in messages %}<p class="notice__title">{{ m }}</p>{% endfor %}</div>{% endif %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+  </main>
+</div>
+</body>
+</html>

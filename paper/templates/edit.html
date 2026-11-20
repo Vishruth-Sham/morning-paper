@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% from "macros.html" import ext %}
+{% block title %}Edit my paper · The Morning Paper{% endblock %}
+{% block head %}<style>
+  #plan .table { min-width: 96rem; }
+  .table td .input, .table td .textarea, .table td .select { display: block; width: 100%; min-width: 8rem; font-size: .875rem; box-sizing: border-box; margin-bottom: .35rem; }
+  .table td.slot { min-width: 12rem; }
+  .table td .textarea { min-height: 9rem; }
+  .table td.mono .textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .75rem; min-width: 24rem; }
+  .table td label { display: block; font-size: .75rem; margin-top: .4rem; }
+  .table tr.off td { opacity: .55; }
+  .handle-form { display: inline; }
+  .table-wrap { position: relative; }
+</style>{% endblock %}
+{% block content %}
+{% set statuses = {'ok': ('status--ok', 'Working'), 'fallback': ('status--fallback', 'Used fallback'), 'failed': ('status--failed', 'Failed'),
+                   'published': ('status--ok', 'Published'), 'skipped': ('status--fallback', 'Skipped'), 'running': ('status--fallback', 'Running')} %}
+<div class="page-head">
+  <h1 class="page-head__title">Plan and diagnostics</h1>
+  <p class="page-head__note">Changes apply from the next paper. Papers already published stay as they were.</p>
+</div>
+<p><a href="{{ url_for('edit_paper') }}">‹ Back to the simple view</a></p>
+<nav class="subnav" aria-label="Sections of this page">
+  <a href="#you">About you</a><a href="#plan">Curation plan</a><a href="#issues">Today's paper</a><a href="#diagnostics">Last run</a>
+</nav>
+
+<section class="panel" id="you" aria-labelledby="you-h">
+  <h2 class="side-head" id="you-h">About you</h2>
+  <form method="post" action="{{ url_for('save_profile') }}">
+    <div class="qs">
+      <div class="field"><label for="q1">What are you interested in?</label>
+        <textarea class="textarea" id="q1" name="interests">{{ profile.interests }}</textarea>
+        <p class="hint">Decides which personal sections you get, such as Business or Sports.</p></div>
+      <div class="field"><label for="q2">What are you trying to understand or achieve?</label>
+        <textarea class="textarea" id="q2" name="goals">{{ profile.goals }}</textarea>
+        <p class="hint">Decides the angle. The same interest reads differently for a different goal.</p></div>
+      <div class="field"><label for="q3">What should your paper always cover?</label>
+        <textarea class="textarea" id="q3" name="always_cover">{{ profile.always_cover }}</textarea>
+        <p class="hint">Covered every day, whatever your interests. A big enough story can lead the paper.</p></div>
+    </div>
+    <details>
+      <summary>Secondary settings</summary>
+      <div class="settings">
+        <div class="field"><label for="s-front">Front page minutes</label><input class="input" id="s-front" type="number" name="front_page_minutes" min="1" max="30" value="{{ profile.front_page_minutes }}"></div>
+        <div class="field"><label for="s-bus">Business routine minutes</label><input class="input" id="s-bus" type="number" name="business_minutes" min="0" max="90" value="{{ profile.business_minutes }}"></div>
+        <div class="field"><label for="s-tz">Paper is dated in</label><input class="input" id="s-tz" name="timezone" value="{{ profile.timezone }}"></div>
+        <div class="field"><label for="s-src">Preferred sources</label><input class="input" id="s-src" name="preferred_sources" value="{{ profile.preferred_sources }}"></div>
+        <div class="field"><label for="s-read">Reading preference</label><input class="input" id="s-read" name="reading_preference" value="{{ profile.reading_preference }}"></div>
+        <div class="field"><label for="s-llm">Writer</label>
+          <select class="select" id="s-llm" name="llm_provider">
+            {% for v, l in [('auto', 'Automatic'), ('anthropic', 'Anthropic API'), ('claude-cli', 'Claude Code CLI'), ('none', 'No AI (rules only)')] %}
+            <option value="{{ v }}" {% if profile.llm_provider == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
+          </select>
+          <p class="hint">Now using: <strong>{{ llm.name }}</strong>.{% if not llm.available %} Briefs will be extracts and the plan can only be edited by hand. Set ANTHROPIC_API_KEY or sign in to the claude command-line tool to turn on AI.{% endif %}</p></div>
+      </div>
+    </details>
+    <div class="actions"><button class="btn btn--primary" type="submit">Save and propose plan changes</button></div>
+  </form>
+</section>
+
+<section class="panel" id="plan" aria-labelledby="plan-h">
+  <h2 class="side-head" id="plan-h">Curation plan</h2>
+  <p class="panel__intro">One row per slot in the paper. Edit a row and press Save on it; ↑ ↓ reorder. Cells you edit are marked, and kept when the plan is redrafted unless you tick that change.</p>
+
+  {% if job and job.status == 'running' %}
+    <div class="notice" role="status"><p class="notice__title">Drafting proposed changes. Reload this page in a minute.</p></div>
+  {% elif job and job.result and job.result.status == 'error' %}
+    <div class="notice" role="status"><p class="notice__title">The plan couldn't be redrafted.</p><p>{{ job.result.message }}</p></div>
+  {% endif %}
+
+  {% if proposal %}
+  <div class="notice" role="status">
+    <p class="notice__title">{{ changes | length }} change{{ 's' if changes | length != 1 }} proposed to the plan. Nothing applies until you choose.</p>
+    {% if proposal.rationale %}<p>{{ proposal.rationale }}</p>{% endif %}
+    <form method="post" action="{{ url_for('apply_proposal', pid=proposal.id) }}">
+      <ul>
+      {% for ch in changes %}
+        <li><label><input type="checkbox" name="accept" value="{{ loop.index0 }}" {% if not ch.manually_edited %}checked{% endif %}>
+          <strong>{{ ch.slot_label }}</strong>
+          {% if ch.kind == 'add' %}: new slot <ins>{{ ch.new.purpose }}</ins>
+          {% elif ch.kind == 'remove' %}: <del>remove this slot</del>
+          {% elif ch.field == 'sources' %} sources: <del>{{ ch.old | map(attribute='name') | join(', ') }}</del> <ins>{{ ch.new | map(attribute='name') | join(', ') }}</ins>
+          {% else %} {{ ch.field | replace('_', ' ') }}: <del>{{ ch.old }}</del> <ins>{{ ch.new }}</ins>{% endif %}
+          {% if ch.manually_edited %}<span class="legend"> · You edited this. It stays unless you tick it.</span>{% endif %}
+          {% if ch.note %}<br><span class="legend">{{ ch.note }}</span>{% endif %}</label></li>
+      {% endfor %}
+      </ul>
+      <div class="actions"><button class="btn btn--primary" type="submit" name="action" value="apply">Apply ticked changes</button><button class="btn" type="submit" name="action" value="dismiss">Dismiss</button></div>
+    </form>
+  </div>
+  {% endif %}
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th><span class="visually-hidden">Order</span></th><th>Slot</th><th>Purpose</th><th>Sources and fetch method</th><th>Selection rule</th><th>Frequency and freshness</th><th>Display format</th><th><span class="visually-hidden">Save</span></th></tr></thead>
+      <tbody>
+      {% for s in plan.slots %}
+        {% set fid = 'slot-form-' ~ s.id %}
+        {% set ed = s.edited_fields or [] %}
+        <tr id="slot-{{ s.id }}" class="{% if not s.enabled %}off{% endif %}">
+          <td>
+            <form class="handle-form" method="post" action="{{ url_for('move_slot', slot_id=s.id) }}"><input type="hidden" name="delta" value="-1"><button class="handle" type="submit" aria-label="Move {{ s.slot }} up" {% if loop.first %}disabled{% endif %}>↑</button></form>
+            <form class="handle-form" method="post" action="{{ url_for('move_slot', slot_id=s.id) }}"><input type="hidden" name="delta" value="1"><button class="handle" type="submit" aria-label="Move {{ s.slot }} down" {% if loop.last %}disabled{% endif %}>↓</button></form>
+          </td>
+          <td class="slot {% if 'slot' in ed or 'section' in ed %}edited{% endif %}">
+            <input class="input" form="{{ fid }}" name="slot" value="{{ s.slot }}" aria-label="Slot name">
+            <input class="input" form="{{ fid }}" name="section" value="{{ s.section }}" aria-label="Section">
+            <label><input form="{{ fid }}" type="checkbox" name="enabled" {% if s.enabled %}checked{% endif %}> In the paper</label>
+          </td>
+          <td class="{% if 'purpose' in ed %}edited{% endif %}"><textarea class="textarea" form="{{ fid }}" name="purpose" aria-label="Purpose">{{ s.purpose }}</textarea></td>
+          <td class="mono {% if 'sources' in ed %}edited{% endif %}">
+            <textarea class="textarea" form="{{ fid }}" name="sources" aria-label="Sources, one per line">{{ s.sources | sources_text }}</textarea>
+            <label>One per line: Name | method | URL | fallback method | fallback URL. Delete a line to remove a source.</label>
+          </td>
+          <td class="{% if 'selection_rule' in ed %}edited{% endif %}"><textarea class="textarea" form="{{ fid }}" name="selection_rule" aria-label="Selection rule">{{ s.selection_rule }}</textarea></td>
+          <td class="{% if 'frequency' in ed or 'freshness_hours' in ed %}edited{% endif %}">
+            <select class="select" form="{{ fid }}" name="frequency" aria-label="Frequency">
+              {% for f in ['daily', 'weekdays', 'weekends', 'weekly'] %}<option {% if s.frequency == f %}selected{% endif %}>{{ f }}</option>{% endfor %}
+            </select>
+            <label>Max age in hours (0 = any)<input class="input" form="{{ fid }}" type="number" name="freshness_hours" min="0" value="{{ s.freshness_hours }}"></label>
+          </td>
+          <td class="{% if 'display_format' in ed or 'item_limit' in ed or 'length_limit_words' in ed %}edited{% endif %}">
+            <select class="select" form="{{ fid }}" name="display_format" aria-label="Display format">
+              {% for f in ['brief', 'case_study', 'exercise', 'long_read'] %}<option {% if s.display_format == f %}selected{% endif %}>{{ f }}</option>{% endfor %}
+            </select>
+            <label>Items<input class="input" form="{{ fid }}" type="number" name="item_limit" min="1" max="10" value="{{ s.item_limit }}"></label>
+            <label>Words each<input class="input" form="{{ fid }}" type="number" name="length_limit_words" min="20" max="600" value="{{ s.length_limit_words }}"></label>
+          </td>
+          <td><form id="{{ fid }}" method="post" action="{{ url_for('edit_slot', slot_id=s.id) }}"><button class="btn btn--small" type="submit">Save</button></form></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="legend">A rule on the left edge marks a cell you edited by hand. Fetch methods: rss, gnews, gnews_search, page, wikipedia, featured. Plan version {{ plan.id }}, saved {{ plan.created_at | nicedate }} ({{ plan.note }}).</p>
+  <div class="actions" style="margin-top:.75rem">
+    <form method="post" action="{{ url_for('regenerate_plan') }}" style="display:inline"><button class="btn" type="submit" {% if not llm.available %}disabled title="No AI writer is set up"{% endif %}>Redraft from my answers</button></form>
+  </div>
+  <details style="margin-top:.75rem"><summary>Plan history</summary>
+    <ul class="queue">{% for p in plans %}<li><a href="{{ url_for('plan_version', version=p.id) }}">Version {{ p.id }}</a> · {{ p.note }}<span class="when">{{ p.created_at | nicedate }} · {{ p.origin }}</span></li>{% endfor %}</ul>
+  </details>
+</section>
+
+<section class="panel" id="issues" aria-labelledby="issues-h">
+  <h2 class="side-head" id="issues-h">Today's paper</h2>
+  {% if edition_job and edition_job.status == 'running' %}
+    <p class="panel__intro">A paper is being made. <a href="{{ url_for('generating') }}">See progress</a>.</p>
+  {% elif today_published %}
+    <p class="panel__intro">Today's paper is published and won't be overwritten. To read today's news with a revised plan, publish a fresh issue; the earlier one stays in the archive.</p>
+    <form method="post" action="{{ url_for('generate') }}"><input type="hidden" name="new_issue" value="1"><button class="btn" type="submit">Publish a fresh issue for today</button></form>
+  {% else %}
+    <form method="post" action="{{ url_for('generate') }}"><button class="btn btn--primary" type="submit">Generate today's edition</button></form>
+  {% endif %}
+</section>
+
+<section class="panel" id="diagnostics" aria-labelledby="diag-h">
+  <h2 class="side-head" id="diag-h">Last run</h2>
+  {% set last = runs[0] if runs else none %}
+  {% if not last %}
+    <p class="panel__intro">No runs yet. The first paper was put together by hand from checked sources.</p>
+  {% else %}
+    <p class="panel__intro">Paper for {{ last.edition_date | longdate }}, started {{ last.started_at | nicedate }} · plan version {{ last.plan_version }} · <span class="status {{ statuses.get(last.status, ('', last.status))[0] }}">{{ statuses.get(last.status, ('', last.status))[1] }}</span> {{ last.message }}</p>
+    <div class="table-wrap">
+      <table class="table" style="min-width:40rem">
+        <thead><tr><th>Source</th><th>Slot</th><th>Method</th><th>Result</th><th>Note</th></tr></thead>
+        <tbody>
+        {% for s in last.diagnostics.get('sources', []) %}
+        <tr><td>{{ ext(s.url, s.source) }}</td><td>{{ s.slot }}</td><td>{{ s.method }}</td>
+            <td><span class="status {{ statuses.get(s.status, ('', s.status))[0] }}">{{ statuses.get(s.status, ('', s.status))[1] }}</span></td>
+            <td>{{ s.count }} items{% if s.error %} · {{ s.error }}{% endif %}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% set warn = last.diagnostics.get('validation', []) %}
+    <p class="legend">{% if warn %}Checks flagged {{ warn | length }}: {{ warn | join('; ') }}{% else %}All checks passed: links, dates, maths re-computed, no repeats, reading time.{% endif %} <a href="{{ url_for('run_detail', run_id=last.id) }}">Full diagnostics</a></p>
+    {% if runs | length > 1 %}
+    <details><summary>Earlier runs</summary>
+      <ul class="queue">{% for r in runs[1:] %}<li><a href="{{ url_for('run_detail', run_id=r.id) }}">Run {{ r.id }}</a> · {{ r.edition_date }} · {{ statuses.get(r.status, ('', r.status))[1] }}<span class="when">{{ r.message }}</span></li>{% endfor %}</ul>
+    </details>
+    {% endif %}
+  {% endif %}
+</section>
+{% endblock %}

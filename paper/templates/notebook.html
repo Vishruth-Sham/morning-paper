@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Notebook · The Morning Paper{% endblock %}
+{% block head %}<style>
+  .nb-write { max-width: 46rem; margin-top: 1.25rem; }
+  .nb-write .textarea { width: 100%; min-height: 9rem; box-sizing: border-box; font-size: 1.0625rem; }
+  .nb-write .actions { margin-top: .75rem; }
+  .nb-list { max-width: 46rem; margin-top: 2rem; }
+</style>{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1 class="page-head__title">Notebook</h1>
+  <p class="page-head__note">Write down anything you're curious about. Tomorrow's paper picks it up.</p>
+</div>
+
+<form class="nb-write" method="post" action="{{ url_for('ask') }}">
+  <label class="visually-hidden" for="nb-text">What are you curious about?</label>
+  <textarea class="textarea" id="nb-text" name="question" maxlength="2000" required placeholder="Anything at all. Why gyms sell yearly memberships, how dabbawalas price their service, what happened with…"></textarea>
+  <input type="hidden" name="next" value="{{ url_for('notebook') }}">
+  <div class="actions"><button class="btn btn--primary" type="submit">Save for tomorrow</button></div>
+</form>
+
+{% set pend = questions | selectattr('status', 'equalto', 'pending') | list %}
+{% set done = questions | selectattr('status', 'equalto', 'answered') | list %}
+<section class="nb-list" aria-labelledby="pend-h">
+  <h2 class="side-head" id="pend-h">For tomorrow's paper</h2>
+  <ul class="queue">
+    {% for q in pend %}
+    <li>{{ q.text }}<span class="when">Saved {{ q.created_at | nicedate }} ·
+      <form method="post" action="{{ url_for('drop_question', qid=q.id) }}" style="display:inline"><button class="btn btn--small" type="submit">Remove</button></form></span></li>
+    {% else %}
+    <li class="legend">Nothing saved yet.</li>
+    {% endfor %}
+  </ul>
+  {% if done %}
+  <h2 class="side-head" style="margin-top:1.5rem">Already answered</h2>
+  <ul class="queue">
+    {% for q in done[:20] %}<li>{{ q.text }}<span class="when"><a href="{{ url_for('edition', date=q.edition_date, issue_no=q.edition_issue) }}#you-asked">In the {{ q.edition_date | nicedate }} paper</a></span></li>{% endfor %}
+  </ul>
+  {% endif %}
+</section>
+{% endblock %}

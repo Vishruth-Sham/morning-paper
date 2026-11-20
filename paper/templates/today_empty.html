@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}The Morning Paper · {{ date | longdate }}{% endblock %}
+{% block topbar_left %}<span>{{ date | longdate(weekday=True) }}</span>{% endblock %}
+{% block content %}
+<section class="empty" aria-labelledby="empty-title">
+  <h1 class="empty__title" id="empty-title">Today's paper hasn't been made yet</h1>
+  {% if job and job.status == 'running' %}
+    <p>It's being made now.</p>
+    <p><a class="btn btn--primary" href="{{ url_for('generating') }}">See progress</a></p>
+  {% else %}
+    <p>It takes a minute or two.{% if latest %} The last paper stays readable while this one is made, and nothing changes if the run fails.{% endif %}</p>
+    <form method="post" action="{{ url_for('generate') }}"><button class="btn btn--primary" type="submit">Generate today's edition</button></form>
+  {% endif %}
+  {% if latest %}<p style="margin-top:1rem"><a href="{{ url_for('edition', date=latest.date, issue_no=latest.issue_no) }}">Read {{ latest.date | longdate(weekday=True) }}'s paper instead</a></p>{% endif %}
+</section>
+{% endblock %}

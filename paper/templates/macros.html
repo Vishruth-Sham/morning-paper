@@ -1,0 +1,13 @@
+{% macro ext(url, text, cls='') -%}
+<a {% if cls %}class="{{ cls }}" {% endif %}href="{{ url }}" target="_blank" rel="noopener">{{ text }}</a>
+{%- endmacro %}
+
+{% macro byline(it, prefix='') -%}
+<p class="byline">{{ prefix }}{{ ext(it.url, it.publisher) }}{% if it.published_at %} · <time datetime="{{ it.published_at }}">{{ it.published_at | nicedate }}</time>{% endif %}{% if it.direct_link is defined and not it.direct_link %} · via Google News{% endif %}</p>
+{%- endmacro %}
+
+{% macro tag(kind) -%}
+{% set m = {'reported': ('tag--reported', 'Reported'), 'estimate': ('tag--assumed', 'Estimate'),
+            'assumption': ('tag--assumed', 'Assumed'), 'goal': ('tag--unknown', 'Your goal'), 'unknown': ('tag--unknown', 'Unknown')} %}
+{% set t = m.get(kind, ('tag--unknown', kind)) %}<span class="tag {{ t[0] }}">{{ t[1] }}</span>
+{%- endmacro %}

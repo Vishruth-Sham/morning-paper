@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Notebook entry · The Morning Paper{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1 class="page-head__title">{% if note.id %}Edit {{ note.name }}{% else %}Save a business{% endif %}</h1>
+  <p class="page-head__note">{% if note.origin == 'edition' %}Filled in from the paper's Startup Story. Change anything before saving.{% else %}Everything except the name is optional.{% endif %}</p>
+</div>
+<div class="panel">
+  {% include "_note_fields.html" %}
+  {% if note.id %}
+  <form method="post" action="{{ url_for('note_delete', nid=note.id) }}" style="margin-top:1rem"><button class="btn btn--small" type="submit">Remove from notebook</button></form>
+  {% endif %}
+</div>
+{% endblock %}

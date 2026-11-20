@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Making today's paper{% endblock %}
+{% block head %}<meta http-equiv="refresh" content="4">{% endblock %}
+{% block content %}
+<section class="empty" aria-labelledby="gen-title">
+  <h1 class="empty__title" id="gen-title">Making today's paper</h1>
+  <p>This page checks every few seconds and opens the edition when it's ready. A published paper is never changed by a run.</p>
+  {% set steps = run.diagnostics.get('steps', []) if run and run.diagnostics else [] %}
+  <ol class="steps" aria-label="Progress of this run">
+    {% for s in steps %}
+    <li><span>{{ s.msg }}</span>{% if loop.last %}<span class="st st--now">Working</span>{% else %}<span class="st st--done">Done</span>{% endif %}</li>
+    {% else %}
+    <li><span>Starting</span><span class="st st--now">Working</span></li>
+    {% endfor %}
+  </ol>
+</section>
+{% endblock %}

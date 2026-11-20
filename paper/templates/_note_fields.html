@@ -1,0 +1,14 @@
+{% set note = note if note is defined else {} %}
+<form class="form-grid" method="post" action="{{ url_for('note_edit', nid=note.id) if note.id else url_for('note_new') }}">
+  <div class="field field--wide"><label for="b-name">Name</label><input class="input" id="b-name" name="name" type="text" required value="{{ note.name or '' }}"></div>
+  <div class="field field--wide"><label for="b-sells">What it sells</label><input class="input" id="b-sells" name="what_it_sells" type="text" value="{{ note.what_it_sells or '' }}"></div>
+  <div class="field field--wide"><label for="b-rev">Revenue model</label><input class="input" id="b-rev" name="revenue_model" type="text" value="{{ note.revenue_model or '' }}"></div>
+  <div class="field field--wide"><label for="b-econ">Estimated economics</label><textarea class="textarea" id="b-econ" name="estimated_economics">{{ note.estimated_economics or '' }}</textarea></div>
+  <div class="field field--wide"><label for="b-acq">How it gets customers</label><input class="input" id="b-acq" name="acquisition_strategy" type="text" value="{{ note.acquisition_strategy or '' }}"></div>
+  <div class="field field--wide"><label for="b-copy">One thing I'd copy</label><textarea class="textarea" id="b-copy" name="copy_this">{{ note.copy_this or '' }}</textarea></div>
+  <div class="field field--wide"><label for="b-notes">Notes</label><textarea class="textarea" id="b-notes" name="notes">{{ note.notes or '' }}</textarea></div>
+  <div class="field field--wide"><label for="b-src">Source link</label><input class="input" id="b-src" name="source_url" type="url" value="{{ note.source_url or '' }}"></div>
+  <input type="hidden" name="edition_id" value="{{ note.edition_id or '' }}">
+  <input type="hidden" name="origin" value="{{ note.origin or 'manual' }}">
+  <div><button class="btn btn--primary" type="submit">Save to notebook</button></div>
+</form>

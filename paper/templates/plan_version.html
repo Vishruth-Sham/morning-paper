@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Plan version {{ p.id }} · The Morning Paper{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1 class="page-head__title">Plan version {{ p.id }}</h1>
+  <p class="page-head__note">{{ p.note }} · {{ p.origin }} · {{ p.created_at | nicedate }}</p>
+</div>
+<section class="panel">
+  <pre style="white-space:pre-wrap;font-size:.8rem">{{ p.slots | tojson_pretty }}</pre>
+</section>
+{% endblock %}

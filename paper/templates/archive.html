@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Archive · The Morning Paper{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1 class="page-head__title">Archive</h1>
+  <p class="page-head__note">Every published paper, by date. Each one keeps its own link and never changes after it is published.</p>
+</div>
+{% if not editions %}<p>No papers yet.</p>{% endif %}
+{% for month, group in editions | groupby('month') | reverse %}
+<h2 class="month">{{ month_names[month] }}</h2>
+<ol class="issues">
+  {% for e in group %}
+  <li class="issue">
+    <p class="issue__date">{{ e.date | nicedate(False) }}<span>{{ e.weekday }}{% if e.issue_no > 1 %} · No. {{ e.issue_no }}{% endif %}</span></p>
+    <div><h2 class="issue__lead"><a href="{{ url_for('edition', date=e.date, issue_no=e.issue_no) }}">{{ e.lead_headline }}</a></h2>{% if e.also %}<p class="issue__also">{{ e.also }}</p>{% endif %}</div>
+    <span class="issue__time">{{ e.reading_minutes }} min</span>
+  </li>
+  {% endfor %}
+</ol>
+{% endfor %}
+{% endblock %}
