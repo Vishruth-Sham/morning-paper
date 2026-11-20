@@ -457,7 +457,7 @@ class Run:
         return {"items": [item], "rotation": rot}
 
     def _compose_case(self, slot, pick, art, rot):
-        base = {"headline": art.get("title") or pick["title"], "publisher": pick.get("publisher") or "Case study", "url": pick["url"],
+        base = {"headline": re.sub(r"\s+[-|–]\s+Starter Story$", "", art.get("title") or pick["title"]), "publisher": pick.get("publisher") or "Case study", "url": pick["url"],
                 "published_at": art.get("published_at"), "rotation_business": rot["business"] if rot else "",
                 "lesson": rot["lesson"] if rot else "", "image": art.get("image"),
                 "original_minutes": max(1, round(words(art.get("text")) / WPM))}

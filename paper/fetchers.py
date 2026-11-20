@@ -280,6 +280,7 @@ def check_link(url: str) -> tuple[str, str]:
         return "broken", type(e).__name__
     if r.status_code < 400:
         return "ok", str(r.status_code)
-    if r.status_code in (401, 403, 429):
-        return "blocked", f"HTTP {r.status_code} (publisher blocks automated checks)"
-    return "broken", f"HTTP {r.status_code}"
+    if r.status_code in (404, 410):  # really gone
+        return "broken", f"HTTP {r.status_code}"
+    # 401/402/403/406/419/429/451/5xx: paywalls, bot walls and hiccups. The page is very likely fine for a person.
+    return "blocked", f"HTTP {r.status_code} (publisher blocks automated checks)"
