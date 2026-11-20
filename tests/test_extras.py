@@ -72,8 +72,8 @@ def test_extra_sections_render(app, monkeypatch):
     assert ed["content"]["lead"]["section_id"] == "news"
     assert pipeline.choose_lead([{**secs["hobby"], "lead": True}, secs["news"]])["section_id"] == "hobby"
     html = app.test_client().get("/edition/2026-11-21/1").get_data(as_text=True)
-    assert "Concept of the day" in html and 'class="yourday"' in html and "Sampletown" in html and "+2.00%" in html
-    assert "More for you" in html and "Call a friend." in html and "New trail opens" in html
+    assert "Concept of the day" in html and 'class="cards"' in html and "Sampletown" in html and "+2.00%" in html
+    assert "Call a friend." in html and "New trail opens" in html
 
 
 def test_tasks_without_token_is_a_note(app):

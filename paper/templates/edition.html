@@ -2,8 +2,6 @@
 {% from "macros.html" import ext, byline, tag %}
 {% block title %}The Morning Paper · {{ c.weekday }}, {{ ed.date | nicedate }}{% endblock %}
 {% set secs = {} %}{% for s in c.sections %}{% if (s.placement or 'main') == 'main' and s.kind not in secs %}{% set _ = secs.update({s.kind: s}) %}{% endif %}{% endfor %}
-{% set top_secs = c.sections | selectattr('placement', 'equalto', 'top') | list %}
-{% set more_secs = c.sections | selectattr('placement', 'equalto', 'more') | selectattr('items') | list %}
 {% set news = secs.get('news') %}
 {% set case_sec = secs.get('case_study') %}
 {% set case = case_sec['items'][0] if case_sec and case_sec['items'] else none %}
@@ -11,7 +9,7 @@
 {% block mast %}
 <div class="mast">
   <h1 class="mast__title"><a href="{{ url_for('today') }}">The Morning Paper</a></h1>
-  <div class="ear ear--left"><b>Today's reading</b>Front page {{ c.reading.front_minutes }} min<br>Business {{ c.reading.business_minutes }} min{% if c.reading.more_minutes %}<br>More for you {{ c.reading.more_minutes }} min{% endif %}</div>
+  <div class="ear ear--left"><b>Today's reading</b>Front page {{ c.reading.front_minutes }} min<br>Business {{ c.reading.business_minutes }} min{% if c.reading.more_minutes %}<br>Your sections {{ c.reading.more_minutes }} min{% endif %}</div>
   {% if case %}<div class="ear ear--right"><b>Inside</b>{{ case.business_name or case.headline }}{% if secs.get('exercise') and secs['exercise']['items'] %}, and the maths behind it{% endif %}</div>{% endif %}
 </div>
 {% endblock %}
@@ -21,171 +19,109 @@
 
 {% block content %}
 {% set lead_sec = (c.sections | selectattr('id', 'equalto', lead.section_id) | list | first) if lead else none %}
-{% set lead_it = lead_sec['items'][lead.index] if lead_sec and lead.index < lead_sec['items'] | length else none %}
+{% set news_secs = [] %}
+{% if lead_sec and lead_sec.kind == 'news' and lead_sec['items'] %}{% set _ = news_secs.append(lead_sec) %}{% endif %}
+{% for s in c.sections if s.kind == 'news' and s['items'] and s not in news_secs %}{% set _ = news_secs.append(s) %}{% endfor %}
 
-{# ---------- Your day: tasks, weather, markets in one strip ---------- #}
-{% if top_secs %}
-<section class="yourday" aria-label="Your day">
-  {% for s in top_secs %}
-  <div class="yourday__cell">
-    <p class="kicker">{{ s.slot }}</p>
-    {% if s.kind == 'tasks' %}
-      {% set tasks = s['items'] | selectattr('kind', 'equalto', 'task') | list %}
-      {% if tasks %}<ul class="yourday__list">{% for t in tasks %}<li{% if t.overdue %} class="overdue"{% endif %}>{{ t.title }}{% if t.overdue %} <span class="legend">overdue</span>{% endif %}</li>{% endfor %}</ul>
-      {% elif not (s['items'] | selectattr('kind', 'equalto', 'note') | list) %}<p class="yourday__line">Nothing due today.</p>{% endif %}
-      {% for it in s['items'] if it.kind == 'count' %}<p class="yourday__line"><strong>{{ it.total }}</strong> {{ it.label | lower }} since {{ it.since | nicedate(False) }} · {{ it.last_7_days }} this week</p>{% endfor %}
-    {% elif s.kind == 'weather' %}
-      {% for it in s['items'] if it.kind == 'weather' %}<p class="yourday__line"><strong>{{ it.place }}</strong> {{ it.high | round | int }}° / {{ it.low | round | int }}°, {{ it.summary }}, rain {{ it.rain_chance }}%{% if it.early_run is not none %} · 6am {{ it.early_run }}°{% endif %}{% if it.sunrise %} · sunrise {{ it.sunrise }}{% endif %}</p>{% endfor %}
-    {% elif s.kind == 'markets' %}
-      <p class="yourday__line">{% for it in s['items'] if it.kind == 'quote' %}{{ ext(it.url, it.label) }} <strong>{{ '{:,.2f}'.format(it.value) }}</strong>{% if it.change_pct is not none %} <span class="{{ 'up' if it.change_pct >= 0 else 'down' }}">{{ '%+.2f' | format(it.change_pct) }}%</span>{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}</p>
-    {% endif %}
-    {% for it in s['items'] if it.kind == 'note' %}<p class="legend">{{ it.text }}</p>{% endfor %}
-  </div>
+{# One heading per section; its stories sit underneath as cards of the same size. #}
+{% for s in news_secs %}
+<div class="bar"><h2 class="bar__title">{{ s.section }}</h2></div>
+<section class="cards" aria-label="{{ s.section }}">
+  {% for it in s['items'] %}
+  <article class="card">
+    <h3 class="card__headline">{{ ext(it.url, it.headline) }}</h3>
+    {% if it.brief %}<p>{{ it.brief }}</p>{% endif %}
+    <p class="byline">{{ it.publisher }}{% if it.published_at %} · {{ it.published_at | nicedate }}{% endif %}{% if it.is_update %} · Update{% endif %}</p>
+  </article>
   {% endfor %}
 </section>
-{% endif %}
+{% endfor %}
 
-<section class="front" aria-label="Front page">
-  {% if lead_it %}
-  <article class="lead">
-    <p class="kicker">{{ lead_sec.section }}{% if lead_sec.kind != 'news' %} · {{ lead_sec.slot }}{% endif %}</p>
-    <h2 class="lead__headline">{{ lead_it.headline }}</h2>
-    {% if lead_sec.kind == 'news' and lead_it.who_it_affects %}<p class="dek">Who it affects: {{ lead_it.who_it_affects }}</p>
-    {% elif lead_it.detail %}<p class="dek">{{ lead_it.detail }}</p>{% endif %}
-    {{ byline(lead_it) }}
-    <div class="lead__body">
-      <p>{{ lead_it.brief or lead_it.summary }}</p>
-      {% if lead_it.also %}<p class="legend">Also: {% for a in lead_it.also %}{{ ext(a.url, a.publisher ~ (': ' ~ a.title if a.title else '')) }}{% if not loop.last %} · {% endif %}{% endfor %}</p>{% endif %}
-      <p>{{ ext(lead_it.url, 'Read the original at ' ~ lead_it.publisher, 'more') }}</p>
-    </div>
+{% for s in c.sections if s.kind in ('weather', 'markets', 'tasks', 'prompt') and s['items'] %}
+<div class="bar"><h2 class="bar__title">{{ s.slot }}</h2></div>
+<section class="cards" aria-label="{{ s.slot }}">
+  {% for it in s['items'] %}
+  <article class="card">
+    {% if it.kind == 'weather' %}<p><strong>{{ it.place }}</strong> {{ it.high | round | int }}° / {{ it.low | round | int }}°, {{ it.summary }}, rain {{ it.rain_chance }}%</p>
+    {% elif it.kind == 'quote' %}<p>{{ ext(it.url, it.label) }} <strong>{{ '{:,.2f}'.format(it.value) }}</strong>{% if it.change_pct is not none %} <span class="{{ 'up' if it.change_pct >= 0 else 'down' }}">{{ '%+.2f' | format(it.change_pct) }}%</span>{% endif %}</p>
+    {% elif it.kind == 'task' %}<p>{{ it.title }}{% if it.overdue %} <span class="legend">overdue</span>{% endif %}</p>
+    {% elif it.kind == 'count' %}<p><strong>{{ it.total }}</strong> {{ it.label | lower }} since {{ it.since | nicedate(False) }}</p>
+    {% elif it.kind == 'prompt' %}<p>{{ it.text }}</p>
+    {% elif it.kind == 'note' %}<p class="legend">{{ it.text }}</p>{% endif %}
   </article>
-  {% endif %}
-
-  <aside class="briefs{% if news and news['items'] | length > 3 %} briefs--compact{% endif %}" aria-label="More news">
-    {% if news %}
-      {% set skip = lead.index if lead_sec and lead_sec.id == news.id else -1 %}
-      {% for it in news['items'] %}{% if loop.index0 != skip %}
-      <article class="brief">
-        <p class="kicker">{{ news.section }}{% if it.is_update %} · Update{% endif %}</p>
-        <h3 class="brief__headline">{{ it.headline }}</h3>
-        <p>{{ it.brief }}</p>
-        {% if it.who_it_affects %}<p class="legend">Who it affects: {{ it.who_it_affects }}</p>{% endif %}
-        {{ byline(it) }}
-      </article>
-      {% endif %}{% endfor %}
-      {% if news['items'] | length <= (1 if skip >= 0 else 0) %}
-      <p class="legend">A quiet day: nothing else met the bar.</p>
-      {% endif %}
-    {% endif %}
-  </aside>
+  {% endfor %}
 </section>
+{% endfor %}
 
-{# ---------- Business: Discover beside the Startup Story, maths underneath ---------- #}
+{# ---------- Business: the same cards ---------- #}
 {% set disc = secs.get('explainer') %}
 {% set ex_sec = secs.get('exercise') %}
 {% set long_sec = secs.get('long_read') %}
 {% set concept_sec = secs.get('concept') %}
 {% set concept_it = concept_sec['items'][0] if concept_sec and concept_sec['items'] else none %}
-{% set disc_items = disc['items'] if disc and not (lead_sec and lead_sec.id == disc.id) else [] %}
-{% set case_shown = case and not (lead_sec and lead_sec.id == case_sec.id) %}
-{% if concept_it or disc_items or case_shown or (ex_sec and ex_sec['items']) or (long_sec and long_sec['items']) %}
-<div class="bar"><h2 class="bar__title">Business</h2><span class="bar__note">{% if concept_it %}The concept, then {% endif %}Discover, then the Startup Story, then Do the Maths · {{ c.reading.business_minutes }} min</span></div>
-<section class="business" aria-label="Business">
-  <div class="side">
-    {% if concept_it %}
-    <article class="concept">
-      <p class="kicker">Concept of the day · {{ concept_it.concept }}</p>
-      <h3 class="story__headline">{{ concept_it.headline }}</h3>
-      {% if concept_it.explanation %}<p>{{ concept_it.explanation }}</p>{% endif %}
-      {% if concept_it.case_headline %}
-      <p><strong>The real case:</strong> {{ concept_it.case_story or concept_it.case_headline }}</p>
-      <p class="byline">{{ ext(concept_it.case_url, concept_it.case_publisher) }}{% if concept_it.case_published_at %} · {{ concept_it.case_published_at | nicedate }}{% endif %}{% if concept_it.url %} · {{ ext(concept_it.url, 'The concept on Wikipedia') }}{% endif %}</p>
-      {% elif concept_it.url %}<p class="byline">{{ ext(concept_it.url, concept_it.publisher) }}</p>{% endif %}
-      {% if concept_it.takeaway %}<p><strong>Use it:</strong> {{ concept_it.takeaway }}</p>{% endif %}
-      {% if concept_it.case_url %}{{ ext(concept_it.case_url, 'Read the case', 'more') }}{% endif %}
-    </article>
-    {% endif %}
-    {% for it in disc_items %}
-    <article>
-      <p class="kicker">Discover{% if it.original_minutes %} · {{ it.original_minutes }} min{% endif %}</p>
-      <h3 class="story__headline">{{ it.headline }}</h3>
-      <p>{{ it.brief }}</p>
-      {% if it.detail %}<p><strong>The detail:</strong> {{ it.detail }}</p>{% endif %}
-      {{ byline(it) }}
-      {{ ext(it.url, 'Read it on ' ~ it.publisher, 'more') }}
-    </article>
-    {% endfor %}
-    {% if long_sec %}{% for it in long_sec['items'] %}
-    <article class="brief">
-      <p class="kicker">Weekend Deep Dive</p>
-      <h3 class="story__headline">{{ it.headline }}</h3>
-      {% if it.question %}<p><strong>The question:</strong> {{ it.question }}</p>{% endif %}
-      <p>{{ it.brief }}</p>
-      {{ byline(it) }}
-      {{ ext(it.url, 'Listen to the episode', 'more') }}
-    </article>
-    {% endfor %}{% endif %}
-  </div>
-
-  <div class="main">
-    {% if case_shown %}
-    <article>
-      <p class="kicker">Startup Story{% if case.original_minutes %} · {{ case.original_minutes }} min{% endif %}{% if case_sec.rotation %} · {{ case_sec.rotation.business }}{% endif %}</p>
-      <h3 class="story__headline">{{ case.headline }}</h3>
-      <p class="byline">{{ ext(case.url, case.publisher) }} · {% if case.published_at %}First published {{ case.published_at | longdate }}{% else %}Publication date not shown{% endif %}</p>
-      {% if case.summary %}<p>{{ case.summary }}</p>{% endif %}
-      <dl class="facts">
-        {% for label, key in [('Sells', 'what_it_sells'), ('Who pays', 'who_pays'), ('Price', 'pricing'), ('Customers from', 'acquisition'), ('Revenue', 'revenue'), ('Costs', 'costs')] %}
-          {% if case[key] %}<dt>{{ label }}</dt><dd>{{ case[key] }}{% if key == 'costs' and 'not disclosed' in case[key] | lower %} {{ tag('unknown') }}{% elif key == 'revenue' %} {{ tag('reported') }}{% endif %}</dd>{% endif %}
-        {% endfor %}
-        {% for f in case.figures or [] %}<dt>{{ f.label }}</dt><dd>{{ f.value }} {{ tag(f.kind) }}{% if f.attribution %} <span class="legend">{{ f.attribution }}</span>{% endif %}</dd>{% endfor %}
-      </dl>
-      {% if case.lesson_takeaway %}<p><strong>The lesson:</strong> {{ case.lesson_takeaway }}</p>{% endif %}
-      <p class="actions">{{ ext(case.url, 'Read the case study', 'more') }}</p>
-    </article>
-    {% endif %}
-
-    {% if ex_sec %}{% for ex in ex_sec['items'] %}
-    <aside class="maths" aria-label="Do the Maths">
-      <p class="kicker">Do the Maths · 5 min</p>
-      <h3 class="maths__question">{{ ex.question }}</h3>
-      <table class="maths__inputs">
-        {% for i in ex.inputs %}
-        <tr><td>{{ i.label }} {{ tag(i.kind) }}{% if i.note %}<br><span class="legend">{{ i.note }}</span>{% endif %}</td><td>{{ i.value | fmt(i.unit) }}</td></tr>
-        {% endfor %}
-      </table>
-      <details class="reveal">
-        <summary>Show working</summary>
-        <div class="working">
-          <ol>{% for s in ex.steps %}<li>{{ s.label }}: {{ s.shown or s.expr }} = {{ s.value | fmt(s.unit) }}</li>{% endfor %}</ol>
-          <p class="answer">{{ ex.answer }}</p>
-          {% if ex.takeaway %}<p>{{ ex.takeaway }}</p>{% endif %}
-        </div>
-      </details>
-    </aside>
-    {% endfor %}{% endif %}
-  </div>
-</section>
-{% endif %}
-
-{# ---------- More for you: personal sections, headlines and one line each ---------- #}
-{% if more_secs %}
-<div class="bar" id="more"><h2 class="bar__title">More for you</h2><span class="bar__note">Headlines from your sections · skim, click what's worth it{% if c.reading.more_minutes %} · {{ c.reading.more_minutes }} min{% endif %}</span></div>
-<section class="foryou" aria-label="More for you">
-  {% for s in more_secs %}
-  <div class="foryou__sec">
-    <p class="kicker">{{ s.section }}</p>
-    {% if s.kind == 'prompt' %}
-      {% for it in s['items'] %}<p class="foryou__prompt">{{ it.text }}</p>{% endfor %}
-    {% else %}
-      <ul class="foryou__list">
-      {% for it in s['items'] %}{% if not (lead_sec and lead_sec.id == s.id and loop.index0 == lead.index) %}
-        <li>{{ ext(it.url, it.headline or it.title) }}{% set line = it.brief or it.summary %}{% if line %} <span class="foryou__line">{{ line | truncate(140, True, '…') }}</span>{% endif %} <span class="legend">{{ it.publisher }}</span></li>
-      {% endif %}{% endfor %}
-      </ul>
-    {% endif %}
-  </div>
+{% set disc_items = disc['items'] if disc else [] %}
+{% if concept_it or disc_items or case or (ex_sec and ex_sec['items']) or (long_sec and long_sec['items']) %}
+<div class="bar"><h2 class="bar__title">Business</h2><span class="bar__note">{{ c.reading.business_minutes }} min</span></div>
+<section class="cards" aria-label="Business">
+  {% if concept_it %}
+  <article class="card">
+    <p class="kicker">Concept of the day</p>
+    <h3 class="card__headline">{{ concept_it.headline }}</h3>
+    {% if concept_it.explanation %}<p>{{ concept_it.explanation }}</p>{% endif %}
+    {% if concept_it.case_headline %}<p><strong>The real case:</strong> {{ concept_it.case_story or concept_it.case_headline }}</p>{% endif %}
+    {% if concept_it.takeaway %}<p><strong>Use it:</strong> {{ concept_it.takeaway }}</p>{% endif %}
+    <p class="byline">{% if concept_it.case_url %}{{ ext(concept_it.case_url, concept_it.case_publisher) }}{% endif %}{% if concept_it.url %}{% if concept_it.case_url %} · {% endif %}{{ ext(concept_it.url, 'Wikipedia') }}{% endif %}</p>
+  </article>
+  {% endif %}
+  {% for it in disc_items %}
+  <article class="card">
+    <p class="kicker">Discover{% if it.original_minutes %} · {{ it.original_minutes }} min{% endif %}</p>
+    <h3 class="card__headline">{{ ext(it.url, it.headline) }}</h3>
+    <p>{{ it.brief }}</p>
+    {% if it.detail %}<p><strong>The detail:</strong> {{ it.detail }}</p>{% endif %}
+    {{ byline(it) }}
+  </article>
   {% endfor %}
+  {% if case %}
+  <article class="card">
+    <p class="kicker">Startup Story{% if case_sec.rotation %} · {{ case_sec.rotation.business }}{% endif %}</p>
+    <h3 class="card__headline">{{ ext(case.url, case.headline) }}</h3>
+    {% if case.summary %}<p>{{ case.summary }}</p>{% endif %}
+    <dl class="facts">
+      {% for label, key in [('Sells', 'what_it_sells'), ('Who pays', 'who_pays'), ('Price', 'pricing'), ('Revenue', 'revenue'), ('Costs', 'costs')] %}
+        {% if case[key] %}<dt>{{ label }}</dt><dd>{{ case[key] }}{% if key == 'revenue' %} {{ tag('reported') }}{% endif %}</dd>{% endif %}
+      {% endfor %}
+    </dl>
+    {% if case.lesson_takeaway %}<p><strong>The lesson:</strong> {{ case.lesson_takeaway }}</p>{% endif %}
+    <p class="byline">{{ ext(case.url, case.publisher) }}{% if case.published_at %} · {{ case.published_at | longdate }}{% endif %}</p>
+  </article>
+  {% endif %}
+  {% if ex_sec %}{% for ex in ex_sec['items'] %}
+  <article class="card">
+    <p class="kicker">Do the Maths · 5 min</p>
+    <h3 class="card__headline">{{ ex.question }}</h3>
+    <table class="maths__inputs">
+      {% for i in ex.inputs %}<tr><td>{{ i.label }} {{ tag(i.kind) }}</td><td>{{ i.value | fmt(i.unit) }}</td></tr>{% endfor %}
+    </table>
+    <details class="reveal">
+      <summary>Show working</summary>
+      <div class="working">
+        <ol>{% for st in ex.steps %}<li>{{ st.label }}: {{ st.shown or st.expr }} = {{ st.value | fmt(st.unit) }}</li>{% endfor %}</ol>
+        <p class="answer">{{ ex.answer }}</p>
+        {% if ex.takeaway %}<p>{{ ex.takeaway }}</p>{% endif %}
+      </div>
+    </details>
+  </article>
+  {% endfor %}{% endif %}
+  {% if long_sec %}{% for it in long_sec['items'] %}
+  <article class="card">
+    <p class="kicker">Weekend Deep Dive</p>
+    <h3 class="card__headline">{{ ext(it.url, it.headline) }}</h3>
+    {% if it.question %}<p><strong>The question:</strong> {{ it.question }}</p>{% endif %}
+    <p>{{ it.brief }}</p>
+    {{ byline(it) }}
+  </article>
+  {% endfor %}{% endif %}
 </section>
 {% endif %}
 
