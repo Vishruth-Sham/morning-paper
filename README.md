@@ -22,10 +22,6 @@ then publishes. Once it's out it doesn't change. Old papers sit in the archive.
 Random question during the day? Dump it in the **Notebook**. Tomorrow's paper digs into it -
 with sources, not vibes.
 
-## My data
-
-Answers, notes, past papers - all on my machine. None of it is in this repo.
-
 ## Running it
 
 Refer to [CLAUDE.md](CLAUDE.md).
