@@ -296,8 +296,9 @@ class Run:
             docs = [{"id": i, "title": p["title"], "publisher": p["publisher"], "published_at": p.get("published_at"),
                      "summary": p.get("summary", "")[:800], "text": (p.get("text") or "")[:5000],
                      "is_update_of": p.get("seen_before") if p.get("is_update") else None} for i, p in enumerate(picks)]
-            prompt = (f"Write a factual headline and a two-sentence brief (max {words_limit} words) for each story. "
-                      "Sentence one: what happened. Sentence two: why it matters and who it affects. Use only facts in the "
+            shape = ("a one-sentence brief: what happened and who it affects" if words_limit <= 40 else
+                     "a two-sentence brief. Sentence one: what happened. Sentence two: why it matters and who it affects")
+            prompt = (f"Write a factual headline and {shape}. Hard limit: {words_limit} words per brief. Use only facts in the "
                       "provided text; if the text is thin, stay close to the headline and do not add details. "
                       "For updates, start the headline with 'Update:'. who_it_affects: 3-8 words.\n\n"
                       + json.dumps(docs, ensure_ascii=False))
@@ -313,6 +314,7 @@ class Run:
         items = []
         for p in picks:
             brief = p.get("brief") or sentences(p.get("summary") or p.get("text") or "", 2) or "Summary unavailable — follow the link to the original."
+            brief = clip_words(brief, words_limit)
             items.append({
                 "headline": p.get("headline") or p["title"],
                 "brief": brief,
@@ -760,6 +762,18 @@ def compose_edition(R: Run, sections: list[dict]) -> dict:
     }
     content["reading"] = reading_time(content)
     return content
+
+
+def clip_words(text: str, limit: int) -> str:
+    """Keep whole sentences up to `limit` words; cut the first sentence with an ellipsis if it alone is too long."""
+    if len(text.split()) <= limit:
+        return text
+    out = []
+    for sent in re.split(r"(?<=[.!?])\s+", text):
+        if len(" ".join(out + [sent]).split()) > limit:
+            break
+        out.append(sent)
+    return " ".join(out) if out else " ".join(text.split()[:limit]).rstrip(",;:") + "…"
 
 
 def choose_lead(sections: list[dict]) -> dict:
