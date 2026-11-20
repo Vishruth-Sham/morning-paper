@@ -14,6 +14,10 @@ from pathlib import Path
 from . import fetchers
 from .llm import LLMUnavailable
 
+import logging
+
+log = logging.getLogger(__name__)
+
 # ---------------------------------------------------------------------------- tasks (a local task app)
 
 
@@ -201,7 +205,7 @@ DEFAULT_CONCEPTS = [
     C("Take rate", '"take rate" marketplace OR platform', "Two-sided market"),
     C("Freemium", 'freemium "paid users" OR "conversion"'),
     C("Recurring revenue", '"annual recurring revenue" OR "ARR" startup', "Annual recurring revenue"),
-    C("Burn rate and runway", '"burn rate" OR "runway" startup', "Burn rate"),
+    C("Burn rate and runway", '"cash burn" OR "burn rate" startup', "Burn rate"),
     C("Working capital", '"working capital" company', "Working capital"),
     C("Economic moat", '"moat" company competitors', "Economic moat"),
     C("Product-market fit", '"product-market fit" startup'),
@@ -247,10 +251,11 @@ def concept(R, slot: dict) -> dict:
         try:
             got = R.llm.json("You pick news stories that show a business concept at work in a real company.",
                              f"Concept: {name}\nPick the story that most clearly shows this concept in one named company. "
-                             f"Prefer concrete numbers.\n{listing}", schema, max_tokens=300, effort="low")
-            if 0 <= got.get("id", -1) < len(cases):
-                pick = cases[got["id"]]
-        except (LLMUnavailable, KeyError, ValueError) as e:
+                             f"Prefer concrete numbers. A story that only shares a word with the concept (a company "
+                             f"named after it, say) doesn't count. Return id -1 if none really fits.\n{listing}",
+                             schema, max_tokens=300, effort="low")
+            pick = cases[got["id"]] if 0 <= got.get("id", -1) < len(cases) else None
+        except (LLMUnavailable, KeyError, ValueError, TypeError) as e:
             R.warn(f"Concept {name}: picked the newest case ({e})")
     article = ""
     if pick:
@@ -274,7 +279,9 @@ def concept(R, slot: dict) -> dict:
                 "You explain one business concept a day to a curious reader, then show it in a real company. Plain words, "
                 "short sentences, numbers where the source has them. Use only the material given; never invent figures.",
                 f"Concept: {name}\nDefinition source (Wikipedia):\n{(wiki or {}).get('text', '')[:3000]}\n\n"
-                f"Real case: {item['case_headline']} ({item['case_publisher']})\n{article}\n\n"
+                + (f"Real case: {item['case_headline']} ({item['case_publisher']})\n{article}\n\n" if pick else
+                   "No news case today: use a well-known, widely documented company example and say it's a classic "
+                   "example, without precise figures.\n\n") +
                 f"Reader's goals: {R.profile['goals']}\n\n"
                 "headline: 'Concept, via Company' style, under 10 words. explanation: what the concept is and why it "
                 "matters, under 70 words. case_story: how it shows up in this company, under 90 words, only facts from the "
@@ -282,8 +289,9 @@ def concept(R, slot: dict) -> dict:
                 schema, max_tokens=1500, effort="medium")
             item.update({k: out[k].strip() for k in schema["required"]})
             return {"items": [item]}
-        except (LLMUnavailable, KeyError, ValueError) as e:
+        except (LLMUnavailable, KeyError, ValueError, AttributeError) as e:
             R.warn(f"Concept {name}: written without AI ({e})")
+            log.warning("concept writer failed: %s", e)
     if wiki:
         sentences = re.split(r"(?<=[.!?])\s+", wiki.get("text", ""))
         item["explanation"] = " ".join(sentences[:2])
