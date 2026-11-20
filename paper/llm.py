@@ -87,7 +87,13 @@ class LLM:
             self.last_error = f"claude CLI failed: {e}"
             raise LLMUnavailable(self.last_error) from e
         if out.returncode != 0:
-            self.last_error = f"claude CLI exited {out.returncode}: {out.stderr[:300]}"
+            detail = out.stderr.strip()
+            if not detail:
+                try:
+                    detail = str(json.loads(out.stdout).get("result", ""))
+                except (ValueError, AttributeError):
+                    detail = out.stdout.strip()
+            self.last_error = f"claude CLI exited {out.returncode}: {detail[:300]}"
             raise LLMUnavailable(self.last_error)
         try:
             envelope = json.loads(out.stdout)
