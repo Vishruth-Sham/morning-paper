@@ -298,3 +298,8 @@ p{margin:0 0 .75rem}
 .foryou__list .legend{margin:0}
 .foryou__prompt{font-family:var(--head);font-style:italic;font-size:1.0625rem;line-height:1.4;margin:0}
 .concept{padding-bottom:1rem;margin-bottom:1rem;border-bottom:1px solid var(--rule)}
+/* Compact world briefs when the lead is one of your own sections */
+.briefs--compact .brief{padding-block:.625rem}
+.briefs--compact .brief__headline{font-size:1.0625rem;line-height:1.25;margin-bottom:.25rem}
+.briefs--compact .brief p{font-size:.875rem;line-height:1.45}
+.briefs--compact .brief .legend{display:none}

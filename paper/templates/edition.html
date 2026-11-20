@@ -61,7 +61,7 @@
   </article>
   {% endif %}
 
-  <aside class="briefs" aria-label="More news">
+  <aside class="briefs{% if news and news['items'] | length > 3 %} briefs--compact{% endif %}" aria-label="More news">
     {% if news %}
       {% set skip = lead.index if lead_sec and lead_sec.id == news.id else -1 %}
       {% for it in news['items'] %}{% if loop.index0 != skip %}
@@ -179,9 +179,9 @@
       {% for it in s['items'] %}<p class="foryou__prompt">{{ it.text }}</p>{% endfor %}
     {% else %}
       <ul class="foryou__list">
-      {% for it in s['items'] %}
+      {% for it in s['items'] %}{% if not (lead_sec and lead_sec.id == s.id and loop.index0 == lead.index) %}
         <li>{{ ext(it.url, it.headline or it.title) }}{% set line = it.brief or it.summary %}{% if line %} <span class="foryou__line">{{ line | truncate(140, True, '…') }}</span>{% endif %} <span class="legend">{{ it.publisher }}</span></li>
-      {% endfor %}
+      {% endif %}{% endfor %}
       </ul>
     {% endif %}
   </div>

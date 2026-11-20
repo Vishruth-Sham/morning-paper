@@ -704,7 +704,7 @@ def run_pipeline(db: DB, edition_date: str | None = None, new_issue: bool = Fals
                 return None
             return {"id": slot["id"], "kind": kind, "section": slot["section"], "slot": slot["slot"],
                     "purpose": slot.get("purpose", ""), "items": res.get("items", []), "rotation": res.get("rotation"),
-                    "placement": slot.get("placement") or "main"}
+                    "placement": slot.get("placement") or "main", "lead": bool(slot.get("lead"))}
 
         # Independent sections run side by side; the maths waits for the case study it is about.
         first = [s for s in active if s.get("kind") != "exercise"]
@@ -763,6 +763,12 @@ def compose_edition(R: Run, sections: list[dict]) -> dict:
 
 
 def choose_lead(sections: list[dict]) -> dict:
+    # Sections the reader marked to lead win; world news then only fills the briefs column.
+    for s in sections:
+        if s.get("lead") and s["kind"] == "news" and s["items"]:
+            top = max(s["items"], key=lambda i: i.get("consequence", 0))
+            return {"section_id": s["id"], "index": s["items"].index(top), "headline": top["headline"],
+                    "summary": top.get("brief", ""), "kind": "news", "why": "Your lead section."}
     sections = [s for s in sections if s.get("placement", "main") == "main"]
     news = next((s for s in sections if s["kind"] == "news" and s["items"]), None)
     top = max(news["items"], key=lambda i: i.get("consequence", 0)) if news else None

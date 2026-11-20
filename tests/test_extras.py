@@ -68,8 +68,9 @@ def test_extra_sections_render(app, monkeypatch):
     assert con["concept"] == "Contribution margin" and con["case_url"] == "https://example.com/a"
     assert con["explanation"].startswith("Topic is a thing.")
     assert secs["hobby"]["placement"] == "more" and secs["hobby"]["items"]
-    # a "more" section never takes the lead
+    # a "more" section doesn't lead unless it's marked to
     assert ed["content"]["lead"]["section_id"] == "news"
+    assert pipeline.choose_lead([{**secs["hobby"], "lead": True}, secs["news"]])["section_id"] == "hobby"
     html = app.test_client().get("/edition/2026-11-21/1").get_data(as_text=True)
     assert "Concept of the day" in html and 'class="yourday"' in html and "Sampletown" in html and "+2.00%" in html
     assert "More for you" in html and "Call a friend." in html and "New trail opens" in html
