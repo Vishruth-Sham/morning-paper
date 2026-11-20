@@ -12,11 +12,12 @@ import re
 import time
 import traceback
 from urllib.parse import urlparse
+import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date as Date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from . import fetchers, maths
+from . import extras, fetchers, maths
 from .db import DB
 from .llm import LLM, LLMUnavailable
 
@@ -222,11 +223,16 @@ class Run:
                 "id": {"type": "integer"}, "consequence": {"type": "integer"}, "reason": {"type": "string"},
                 "is_update": {"type": "boolean"}}, "required": ["id", "consequence", "reason", "is_update"],
                 "additionalProperties": False}}}, "required": ["picks"], "additionalProperties": False}
+            if slot.get("placement") == "more":
+                scoring = ("Score consequence 1-10 as usefulness to this reader, given their interests and goals.\n"
+                           f"Reader's interests: {self.profile['interests']}\nReader's goals: {self.profile['goals']}\n")
+            else:
+                scoring = (f"Reader's standing coverage: {self.profile['always_cover']}\n"
+                           "Score consequence 1-10 (10 = changes things for hundreds of millions of people).\n")
             prompt = (f"Section: {slot['section']} — {slot['slot']}\nPurpose: {slot['purpose']}\n"
-                      f"Selection rule: {slot['selection_rule']}\nReader's standing coverage: {self.profile['always_cover']}\n"
-                      f"Pick at most {limit} stories, fewer on a quiet day. Score consequence 1-10 (10 = changes things for "
-                      f"hundreds of millions of people). Skip previously covered stories unless the new item is a material "
-                      f"update (then set is_update). Order by consequence.\n\nCandidates:\n{json.dumps(listing, ensure_ascii=False)}")
+                      f"Selection rule: {slot['selection_rule']}\n{scoring}"
+                      f"Pick at most {limit} stories, fewer on a quiet day. Skip previously covered stories unless the new "
+                      f"item is a material update (then set is_update). Order by score.\n\nCandidates:\n{json.dumps(listing, ensure_ascii=False)}")
             try:
                 out = self.llm.json("You are a careful news editor.", prompt, schema)
                 picks = []
@@ -240,6 +246,11 @@ class Run:
                 return picks
             except (LLMUnavailable, KeyError, ValueError) as e:
                 self.warn(f"AI selection failed for {slot['slot']}, used rules instead: {e}")
+        if slot.get("placement") == "more":  # personal sections: newest first when there's no AI to judge
+            fresh = sorted([c for c in cands if not c.get("seen_before")], key=lambda c: c.get("published_at") or "", reverse=True)
+            for c in fresh[:limit]:
+                c["consequence"], c["selection_reason"] = 5, "Newest"
+            return fresh[:limit]
         scored = []
         for c in cands:
             if c.get("seen_before"):
@@ -664,12 +675,9 @@ def run_pipeline(db: DB, edition_date: str | None = None, new_issue: bool = Fals
     R = Run(db, profile, plan, edition_date, llm, now)
     try:
         R.step(f"Plan version {plan['id']} · writer: {llm.name}")
-        sections = []
-        case_item = None
-        usd_inr = None
-        for slot in plan["slots"]:
-            if not slot.get("enabled", True) or not runs_on(slot, R.day):
-                continue
+        active = [s for s in plan["slots"] if s.get("enabled", True) and runs_on(s, R.day)]
+
+        def run_slot(slot, case_item=None, usd_inr=None):
             kind = slot.get("kind")
             try:
                 if kind == "news":
@@ -678,24 +686,35 @@ def run_pipeline(db: DB, edition_date: str | None = None, new_issue: bool = Fals
                     res = R.explainer(slot)
                 elif kind == "case_study":
                     res = R.case_study(slot)
-                    case_item = res["items"][0] if res["items"] else None
                 elif kind == "exercise":
-                    usd_inr = usd_inr or usd_inr_rate(R.diag)
-                    res = R.exercise(slot, case_item, usd_inr)
+                    res = R.exercise(slot, case_item, usd_inr or usd_inr_rate(R.diag))
                 elif kind == "questions":
                     res = R.questions(slot)
                 elif kind == "long_read":
                     res = R.long_read(slot)
+                elif kind in extras.KINDS:
+                    R.step(f"Making {slot['slot']}")
+                    res = extras.KINDS[kind](R, slot)
                 else:
                     R.warn(f"Unknown slot kind {kind!r}; skipped.")
-                    continue
+                    return None
             except Exception as e:  # noqa: BLE001 - a broken slot should shorten the issue, not kill it
                 R.warn(f"{slot['slot']} failed and was left out: {e}")
                 log.exception("slot failed")
-                continue
-            sections.append({"id": slot["id"], "kind": kind, "section": slot["section"], "slot": slot["slot"],
-                             "purpose": slot.get("purpose", ""), "items": res.get("items", []),
-                             "rotation": res.get("rotation")})
+                return None
+            return {"id": slot["id"], "kind": kind, "section": slot["section"], "slot": slot["slot"],
+                    "purpose": slot.get("purpose", ""), "items": res.get("items", []), "rotation": res.get("rotation"),
+                    "placement": slot.get("placement") or "main"}
+
+        # Independent sections run side by side; the maths waits for the case study it is about.
+        first = [s for s in active if s.get("kind") != "exercise"]
+        with ThreadPoolExecutor(max_workers=int(os.environ.get("MORNING_PAPER_WORKERS", "4"))) as pool:
+            done = dict(zip([s["id"] for s in first], pool.map(run_slot, first)))
+        case = next((d for d in done.values() if d and d["kind"] == "case_study" and d["items"]), None)
+        for s in active:
+            if s.get("kind") == "exercise":
+                done[s["id"]] = run_slot(s, case["items"][0] if case else None)
+        sections = [done[s["id"]] for s in active if done.get(s["id"])]
         # The exercise must follow its case study even if the reader reordered slots.
         content = compose_edition(R, sections)
         validate(R, content)
@@ -744,6 +763,7 @@ def compose_edition(R: Run, sections: list[dict]) -> dict:
 
 
 def choose_lead(sections: list[dict]) -> dict:
+    sections = [s for s in sections if s.get("placement", "main") == "main"]
     news = next((s for s in sections if s["kind"] == "news" and s["items"]), None)
     top = max(news["items"], key=lambda i: i.get("consequence", 0)) if news else None
     if top and top.get("consequence", 0) >= 8:
@@ -763,12 +783,14 @@ def choose_lead(sections: list[dict]) -> dict:
 
 
 def reading_time(content: dict) -> dict:
-    front = business = 0
+    front = business = more = 0
     originals = 0
     for s in content["sections"]:
         for it in s["items"]:
             w = words(*[v for k, v in it.items() if isinstance(v, str) and k not in ("url", "published_at", "image")])
-            if s["kind"] in ("news", "questions"):
+            if s.get("placement") in ("more", "top"):
+                more += w
+            elif s["kind"] in ("news", "questions"):
                 front += w
             else:
                 business += w
@@ -776,7 +798,9 @@ def reading_time(content: dict) -> dict:
                 originals += it.get("original_minutes", 0) or 0
     front_min = max(1, math.ceil(front / WPM))
     business_min = math.ceil(business / WPM) + originals + (3 if any(s["kind"] == "exercise" and s["items"] for s in content["sections"]) else 0)
-    return {"front_minutes": front_min, "business_minutes": business_min, "total_minutes": front_min + business_min}
+    more_min = math.ceil(more / WPM) if more else 0
+    return {"front_minutes": front_min, "business_minutes": business_min, "more_minutes": more_min,
+            "total_minutes": front_min + business_min + more_min}
 
 
 def validate(R: Run, content: dict) -> None:

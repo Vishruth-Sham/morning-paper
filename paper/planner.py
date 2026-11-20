@@ -9,7 +9,7 @@ import json
 from .seed import EDITABLE_FIELDS, SEED_SLOTS
 from .llm import LLM, LLMUnavailable
 
-KINDS = ["news", "explainer", "case_study", "exercise", "questions", "long_read"]
+KINDS = ["news", "explainer", "case_study", "exercise", "questions", "long_read", "tasks", "weather", "markets", "prompt"]
 METHODS = ["rss", "gnews", "gnews_search", "page", "wikipedia", "featured"]
 
 SOURCE_SCHEMA = {
@@ -72,6 +72,8 @@ Rules:
 - Only name feed URLs you are confident exist. Prefer RSS, then Google News, then page extraction.
 - Keep slot ids stable for slots that continue to exist. New slots get a new kebab-case id.
 - Keep the "questions" slot (answers to the reader's own questions) unless the reader asks to drop it.
+- Keep tasks, weather, markets and prompt slots (they have no sources; their settings live outside this
+  schema and are kept automatically) unless the reader asks to drop them.
 - change_note says in one sentence what changed versus the current plan and why ("" if unchanged)."""
 
 

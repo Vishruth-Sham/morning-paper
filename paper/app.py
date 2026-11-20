@@ -423,6 +423,30 @@ def ensure_seeded(db: DB) -> None:
         seed_edition.publish(db)
 
 
+def apply_local(db: DB) -> dict:
+    """Bring the database up to date with the local starting settings (paper/seed_local.py): replace the
+    profile, add sections the plan doesn't have yet, and update fields you haven't edited by hand."""
+    ensure_seeded(db)
+    db.save_profile({**db.get_profile(), **SEED_PROFILE})
+    plan = db.current_plan()
+    seed = {s["id"]: s for s in planner.initial_slots()}
+    slots, updated = [], []
+    for s in plan["slots"]:  # sections you have: take local settings for fields you haven't edited by hand
+        new = dict(s)
+        for k, v in seed.get(s["id"], {}).items():
+            if k not in s.get("edited_fields", []) and new.get(k) != v:
+                new[k] = v
+        if new != s:
+            updated.append(s["id"])
+        slots.append(new)
+    have = {s["id"] for s in slots}
+    added = [dict(s, edited_fields=[]) for s in seed.values() if s["id"] not in have]
+    if added or updated:
+        db.save_plan(slots + added, f"Local settings: {len(added)} sections added, {len(updated)} updated.", "manual",
+                     db.get_profile())
+    return {"profile": "updated", "added_sections": [s["id"] for s in added], "updated_sections": updated}
+
+
 def main():
     import argparse
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -430,8 +454,12 @@ def main():
     ap.add_argument("--port", type=int, default=int(os.environ.get("PORT", 5055)))
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--generate", action="store_true", help="Generate today's edition and exit")
+    ap.add_argument("--apply-local", action="store_true", help="Apply paper/seed_local.py to the database and exit")
     args = ap.parse_args()
     app = create_app()
+    if args.apply_local:
+        print(json.dumps(apply_local(app.config["DB"]), indent=2))
+        return
     if args.generate:
         print(json.dumps(run_pipeline(app.config["DB"]), indent=2, default=str))
         return

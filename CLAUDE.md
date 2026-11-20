@@ -7,6 +7,7 @@ A local Flask + SQLite app. The human-facing README is deliberately short; opera
 ```bash
 uv run morning-paper                 # serves http://127.0.0.1:5055/ (--port to change)
 uv run morning-paper --generate      # make today's edition and exit
+uv run morning-paper --apply-local   # push paper/seed_local.py changes into the existing database, then restart
 ```
 
 Without uv: `python3 -m venv .venv && .venv/bin/pip install -e . && .venv/bin/morning-paper`
@@ -31,6 +32,7 @@ paper still runs on fixed rules. Edit my paper → Advanced shows which writer i
 | `MORNING_PAPER_DB` | `data/paper.db` | Database location |
 | `MORNING_PAPER_MODEL` | `claude-opus-5-5` | Model for the writer |
 | `ANTHROPIC_API_KEY` | none | Writer via the API |
+| `MORNING_PAPER_WORKERS` | `4` | Sections made at the same time |
 
 ## Privacy rules (important)
 
@@ -49,12 +51,22 @@ paper/
   pipeline.py     fetch → filter & group → select → compose → validate → publish
   planner.py      profile → plan; per-field manual edits; proposals
   fetchers.py     RSS, Google News (with link decoding), page extraction, Wikipedia
+  extras.py       non-article sections: tasks (local task app), weather (Open-Meteo), markets, daily prompts
   maths.py        exercises as inputs + formulas, recomputed safely
   db.py           SQLite schema and queries
   seed.py         small generic defaults; overridden by paper/seed_local.py if present
   templates/      Jinja templates (Broadsheet design); static/styles.css
 tests/            offline tests with stubbed fetchers
 ```
+
+## Sections and layout
+
+Each plan slot has a `kind` (news, explainer, case_study, exercise, questions, long_read, tasks, weather,
+markets, prompt) and an optional `placement`: `top` puts it in the compact "Your day" strip above the front
+page, `more` puts it in the "More for you" grid of headlines below Business, and anything else is the
+normal front page/Business layout. Only main news can lead. Slots run in parallel
+(`MORNING_PAPER_WORKERS`, default 4). Settings for the extra kinds (places, symbols, env file, ideas) live
+on the slot itself and survive plan redrafts.
 
 ## Behaviour to preserve
 
