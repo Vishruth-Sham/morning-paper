@@ -393,9 +393,7 @@ class Run:
         idx = next((i for i, r in enumerate(rot) if f"rotation:{r['business']}" == last), -1)
         return rot[(idx + 1) % len(rot)]
 
-    def case_study(self, slot: dict) -> dict:
-        rot = self.next_rotation(slot)
-        self.step(f"Startup Story rotation: {rot['business'] if rot else 'none'}")
+    def _case_candidates(self, slot: dict, rot: dict | None, strict: bool) -> list[dict]:
         raw: list[dict] = []
         for src in slot.get("sources", []):
             url = rot["url"] if (src.get("url") == "rotation" and rot) else src.get("url")
@@ -405,9 +403,29 @@ class Run:
         for c in raw:
             if c["url"] in featured_urls or "/ideas/" in c["url"] or c["url"].rstrip("/").endswith(("/data", "/explore")):
                 continue
-            if not re.search(r"\$[\d.,]+\s?[KkMm]?|revenue|/month|/year", c.get("summary", "") + c["title"]):
+            if strict and not re.search(r"\$[\d.,]+\s?[KkMm]?|revenue|/month|/year", c.get("summary", "") + c["title"]):
                 continue
             cands.append(c)
+        return cands
+
+    def case_study(self, slot: dict) -> dict:
+        rot = self.next_rotation(slot)
+        self.step(f"Startup Story rotation: {rot['business'] if rot else 'none'}")
+        cands = self._case_candidates(slot, rot, strict=True)
+        if not cands:  # same topic, any case study page (the money may only be inside the article)
+            cands = self._case_candidates(slot, rot, strict=False)
+            if cands:
+                self.warn("Startup Story: no listing showed revenue, so picked from all case studies on the topic.")
+        if not cands and slot.get("rotation"):  # next business types in the rotation
+            rots = slot["rotation"]
+            start = rots.index(rot) if rot in rots else -1
+            for k in range(1, min(4, len(rots))):
+                alt = rots[(start + k) % len(rots)]
+                cands = self._case_candidates(slot, alt, strict=False)
+                if cands:
+                    self.warn(f"Startup Story: nothing new for {rot['business'] if rot else 'this topic'}, used {alt['business']}.")
+                    rot = alt
+                    break
         if rot and rot.get("keywords"):
             kw = [k.lower() for k in rot["keywords"]]
             cands.sort(key=lambda c: -sum(k in (c["title"] + c.get("summary", "")).lower() for k in kw))
@@ -712,14 +730,31 @@ def run_pipeline(db: DB, edition_date: str | None = None, new_issue: bool = Fals
         first = [s for s in active if s.get("kind") != "exercise"]
         with ThreadPoolExecutor(max_workers=int(os.environ.get("MORNING_PAPER_WORKERS", "4"))) as pool:
             done = dict(zip([s["id"] for s in first], pool.map(run_slot, first)))
+        # Anything that came back empty gets one more go with looser settings.
+        for s in active:
+            d = done.get(s["id"])
+            if s.get("kind") != "exercise" and expected(s, R) and not (d and d["items"]):
+                R.warn(f"{s['slot']} came back empty; retrying with a wider search.")
+                done[s["id"]] = run_slot(relaxed(s)) or d
         case = next((d for d in done.values() if d and d["kind"] == "case_study" and d["items"]), None)
+        case_item = case["items"][0] if case else None
+        if not case_item:  # keep the maths: use the real company from Concept of the day
+            con = next((d for d in done.values() if d and d["kind"] == "concept" and d["items"]), None)
+            if con and con["items"][0].get("case_headline"):
+                ci = con["items"][0]
+                case_item = {"business_name": ci["case_headline"], "summary": ci.get("case_story", ""),
+                             "what_it_sells": "", "who_pays": "", "pricing": "Not disclosed", "revenue": "Not disclosed",
+                             "costs": "Not disclosed", "figures": [], "headline": ci["case_headline"],
+                             "price_per_customer_usd_month": None}
+                R.warn("Do the Maths used the Concept of the day company because there was no Startup Story.")
         for s in active:
             if s.get("kind") == "exercise":
-                done[s["id"]] = run_slot(s, case["items"][0] if case else None)
+                done[s["id"]] = run_slot(s, case_item)
         sections = [done[s["id"]] for s in active if done.get(s["id"])]
         # The exercise must follow its case study even if the reader reordered slots.
         content = compose_edition(R, sections)
         validate(R, content)
+        content["missing"] = check_rules(R, active, content)
         sources = edition_source_rows(content)
         if not any(s["items"] for s in content["sections"]):
             raise RuntimeError("Nothing could be fetched; no edition published.")
@@ -740,6 +775,56 @@ def run_pipeline(db: DB, edition_date: str | None = None, new_issue: bool = Fals
         R.diag["error"] = traceback.format_exc()[-3000:]
         db.finish_run(run_id, "failed", str(e)[:500], R.diag)
         return {"status": "failed", "message": str(e), "date": edition_date}
+
+
+def expected(slot: dict, R: "Run") -> bool:
+    """Should this section have something today? (You Asked only when there are questions.)"""
+    if slot.get("kind") == "questions":
+        return bool(R.db.list_questions("pending"))
+    return True
+
+
+def relaxed(slot: dict) -> dict:
+    s = dict(slot)
+    s["freshness_hours"] = max(72, int(slot.get("freshness_hours") or 24) * 3) if slot.get("freshness_hours") else 0
+    s["selection_rule"] = (slot.get("selection_rule") or "") + " If nothing fits perfectly, take the closest useful match."
+    return s
+
+
+def check_rules(R: "Run", active: list[dict], content: dict) -> list[dict]:
+    """Check the finished issue against the paper's rules. Returns what is missing (shown in the paper)
+    and records every problem in the run's diagnostics."""
+    by_id = {s["id"]: s for s in content["sections"]}
+    missing = []
+    for slot in active:
+        sec = by_id.get(slot["id"])
+        if expected(slot, R) and not (sec and sec["items"]):
+            if slot.get("kind") == "questions":
+                continue
+            missing.append({"section": slot["section"], "slot": slot["slot"]})
+    problems = []
+    for s in content["sections"]:
+        for it in s["items"]:
+            if s["kind"] in ("news", "explainer", "case_study", "long_read"):
+                if not it.get("url"):
+                    problems.append(f"{s['slot']}: a story has no link.")
+            if s["kind"] == "case_study":
+                for f in ("revenue", "costs", "acquisition", "pricing"):
+                    if not it.get(f):
+                        problems.append(f"Startup Story: '{f}' is empty.")
+                for fig in it.get("figures") or []:
+                    if fig.get("kind") not in ("reported", "estimate"):
+                        problems.append("Startup Story: a figure isn't marked reported or estimate.")
+            if s["kind"] == "exercise" and not (it.get("steps") and it.get("answer")):
+                problems.append("Do the Maths has no worked answer.")
+            if s["kind"] == "concept" and not (it.get("explanation") and it.get("case_url")):
+                problems.append("Concept of the day is missing its explanation or real case.")
+    for m in missing:
+        R.warn(f"Rule check: {m['slot']} is missing from this issue.")
+    for p in problems:
+        R.warn(f"Rule check: {p}")
+    R.diag["rules"] = {"missing": missing, "problems": problems}
+    return missing
 
 
 def compose_edition(R: Run, sections: list[dict]) -> dict:

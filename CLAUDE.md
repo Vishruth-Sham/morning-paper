@@ -72,6 +72,11 @@ on the slot itself and survive plan redrafts.
 
 - One issue per date; generating again does nothing unless a fresh issue is asked for. A failed run never
   touches a published issue. Each issue has a permanent URL `/edition/YYYY-MM-DD/<n>`.
+- Every scheduled section must show up. A section that comes back empty is retried once with a wider search
+  (Startup Story also tries all case studies on the topic, then the next business types in the rotation; Do the
+  Maths falls back to the Concept of the day company). `check_rules` then checks the issue (links, Startup Story
+  fields, reported vs estimate, worked maths, concept + real case) and anything still missing is listed on the
+  page as "Missing today" and in the run diagnostics. Never drop a section silently.
 - Links to originals open in a new tab (`target="_blank" rel="noopener"`).
 - Saving the three answers redrafts the plan and applies it, keeping fields the reader edited by hand.
 

@@ -70,6 +70,7 @@
     {% if concept_it.explanation %}<p>{{ concept_it.explanation }}</p>{% endif %}
     {% if concept_it.case_headline %}<p><strong>The real case:</strong> {{ concept_it.case_story or concept_it.case_headline }}</p>{% endif %}
     {% if concept_it.takeaway %}<p><strong>Use it:</strong> {{ concept_it.takeaway }}</p>{% endif %}
+    {% if concept_it.case_published_at %}<p class="byline">Case published {{ concept_it.case_published_at | nicedate }}</p>{% endif %}
     <p class="byline">{% if concept_it.case_url %}{{ ext(concept_it.case_url, concept_it.case_publisher) }}{% endif %}{% if concept_it.url %}{% if concept_it.case_url %} · {% endif %}{{ ext(concept_it.url, 'Wikipedia') }}{% endif %}</p>
   </article>
   {% endif %}
@@ -80,20 +81,23 @@
     <p>{{ it.brief }}</p>
     {% if it.detail %}<p><strong>The detail:</strong> {{ it.detail }}</p>{% endif %}
     {{ byline(it) }}
+    <p>{{ ext(it.url, 'Read it on ' ~ it.publisher, 'more') }}</p>
   </article>
   {% endfor %}
   {% if case %}
   <article class="card">
-    <p class="kicker">Startup Story{% if case_sec.rotation %} · {{ case_sec.rotation.business }}{% endif %}</p>
+    <p class="kicker">Startup Story{% if case.original_minutes %} · {{ case.original_minutes }} min{% endif %}{% if case_sec.rotation %} · {{ case_sec.rotation.business }}{% endif %}</p>
     <h3 class="card__headline">{{ ext(case.url, case.headline) }}</h3>
     {% if case.summary %}<p>{{ case.summary }}</p>{% endif %}
     <dl class="facts">
-      {% for label, key in [('Sells', 'what_it_sells'), ('Who pays', 'who_pays'), ('Price', 'pricing'), ('Revenue', 'revenue'), ('Costs', 'costs')] %}
-        {% if case[key] %}<dt>{{ label }}</dt><dd>{{ case[key] }}{% if key == 'revenue' %} {{ tag('reported') }}{% endif %}</dd>{% endif %}
+      {% for label, key in [('Sells', 'what_it_sells'), ('Who pays', 'who_pays'), ('Price', 'pricing'), ('Customers from', 'acquisition'), ('Revenue', 'revenue'), ('Costs', 'costs')] %}
+        {% if case[key] %}<dt>{{ label }}</dt><dd>{{ case[key] }}{% if key == 'costs' and 'not disclosed' in case[key] | lower %} {{ tag('unknown') }}{% elif key == 'revenue' %} {{ tag('reported') }}{% endif %}</dd>{% endif %}
       {% endfor %}
+      {% for f in case.figures or [] %}<dt>{{ f.label }}</dt><dd>{{ f.value }} {{ tag(f.kind) }}{% if f.attribution %} <span class="legend">{{ f.attribution }}</span>{% endif %}</dd>{% endfor %}
     </dl>
     {% if case.lesson_takeaway %}<p><strong>The lesson:</strong> {{ case.lesson_takeaway }}</p>{% endif %}
-    <p class="byline">{{ ext(case.url, case.publisher) }}{% if case.published_at %} · {{ case.published_at | longdate }}{% endif %}</p>
+    <p class="byline">{{ ext(case.url, case.publisher) }} · {% if case.published_at %}First published {{ case.published_at | longdate }}{% else %}Publication date not shown{% endif %}</p>
+    <p>{{ ext(case.url, 'Read the case study', 'more') }}</p>
   </article>
   {% endif %}
   {% if ex_sec %}{% for ex in ex_sec['items'] %}
@@ -101,7 +105,7 @@
     <p class="kicker">Do the Maths · 5 min</p>
     <h3 class="card__headline">{{ ex.question }}</h3>
     <table class="maths__inputs">
-      {% for i in ex.inputs %}<tr><td>{{ i.label }} {{ tag(i.kind) }}</td><td>{{ i.value | fmt(i.unit) }}</td></tr>{% endfor %}
+      {% for i in ex.inputs %}<tr><td>{{ i.label }} {{ tag(i.kind) }}{% if i.note %}<br><span class="legend">{{ i.note }}</span>{% endif %}</td><td>{{ i.value | fmt(i.unit) }}</td></tr>{% endfor %}
     </table>
     <details class="reveal">
       <summary>Show working</summary>
@@ -123,6 +127,10 @@
   </article>
   {% endfor %}{% endif %}
 </section>
+{% endif %}
+
+{% if c.missing %}
+<p class="legend missing">Missing today: {% for m in c.missing %}{{ m.slot }}{% if not loop.last %}, {% endif %}{% endfor %}. Nothing usable came in even after a wider search. Details are under Edit my paper → Advanced.</p>
 {% endif %}
 
 {# ---------- You Asked: answers to what you wrote in the Notebook ---------- #}

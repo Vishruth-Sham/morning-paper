@@ -82,3 +82,33 @@ def test_tasks_without_token_is_a_note(app):
         def warn(self, m): pass
     out = extras.tasks(R(), {"slot": "Tasks", "env_file": "/nonexistent/.env"})
     assert out["items"][0]["kind"] == "note"
+
+
+def test_rules_keep_required_sections(app, monkeypatch):
+    """Startup Story still appears when listings show no revenue; empty sections are retried, then flagged."""
+    db = app.config["DB"]
+    plan = db.current_plan()
+    slots = plan["slots"] + [{"id": "empty", "kind": "news", "section": "Quiet", "slot": "Quiet", "purpose": "",
+                              "sources": [{"name": "Nothing", "method": "rss", "url": "https://none.example.com/rss",
+                                           "fallback_method": "", "fallback_url": ""}],
+                              "selection_rule": "", "frequency": "daily", "freshness_hours": 24, "display_format": "brief",
+                              "item_limit": 3, "length_limit_words": 40, "enabled": True, "edited_fields": []}]
+    db.save_plan(slots, "test", "manual", db.get_profile())
+    orig = pipeline.Run._fetch_by_method
+
+    def fetch(self, m, u, src):
+        if src["name"].startswith("Case studies"):
+            return [fetchers.candidate(title="How We Run A Small Payroll Firm", publisher="Case studies",
+                                       url="https://cases.example.com/stories/payroll-firm", summary="Payroll for small firms.")]
+        return orig(self, m, u, src)
+    monkeypatch.setattr(pipeline.Run, "_fetch_by_method", fetch)
+    res = run(app)
+    assert res["status"] == "published", res
+    ed = db.get_edition("2026-11-21", 1)
+    secs = {s["id"]: s for s in ed["content"]["sections"]}
+    assert secs["case"]["items"][0]["url"] == "https://cases.example.com/stories/payroll-firm"
+    assert secs["maths"]["items"]
+    assert "Quiet" in [m["slot"] for m in ed["content"]["missing"]]
+    assert any("Quiet came back empty" in w for w in res["warnings"])
+    html = app.test_client().get("/edition/2026-11-21/1").get_data(as_text=True)
+    assert "Missing today:" in html and "Quiet" in html
