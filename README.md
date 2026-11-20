@@ -1,6 +1,6 @@
 # The Morning Paper
 
-My own newspaper. Runs on my laptop, made for exactly one reader - me.
+My own newspaper. Runs on my laptop.
 
 ![The Morning Paper, with made-up stories](docs/screenshot.png)
 
