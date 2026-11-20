@@ -181,14 +181,43 @@ def prompt(R, slot: dict) -> dict:
 # ---------------------------------------------------------------------------- business concept + real case
 
 
+def C(name, search=None, wikipedia=None):
+    return {"name": name, "search": search, "wikipedia": wikipedia}
+
+
+# Standard business concepts, used when a concept slot doesn't list its own.
+DEFAULT_CONCEPTS = [
+    C("Unit economics", '"unit economics" startup'),
+    C("Customer acquisition cost", '"customer acquisition cost" OR "CAC" startup', "Customer acquisition cost"),
+    C("Customer lifetime value", '"lifetime value" customers company', "Customer lifetime value"),
+    C("Contribution margin", '"contribution margin" company'),
+    C("Gross margin", '"gross margin" company results'),
+    C("Operating leverage", '"operating leverage" company'),
+    C("Churn rate", '"churn" subscribers company', "Churn rate"),
+    C("Network effect", '"network effects" platform company', "Network effect"),
+    C("Switching costs", '"switching costs" customers company', "Switching barriers"),
+    C("Economies of scale", '"economies of scale" company'),
+    C("Pricing power", '"pricing power" company'),
+    C("Take rate", '"take rate" marketplace OR platform', "Two-sided market"),
+    C("Freemium", 'freemium "paid users" OR "conversion"'),
+    C("Recurring revenue", '"annual recurring revenue" OR "ARR" startup', "Annual recurring revenue"),
+    C("Burn rate and runway", '"burn rate" OR "runway" startup', "Burn rate"),
+    C("Working capital", '"working capital" company', "Working capital"),
+    C("Economic moat", '"moat" company competitors', "Economic moat"),
+    C("Product-market fit", '"product-market fit" startup'),
+    C("Bundling", 'bundle subscription company "bundling"', "Product bundling"),
+    C("Vertical integration", '"vertical integration" company'),
+    C("Distribution channel", '"distribution" channel brand company sales', "Distribution (marketing)"),
+    C("Labour arbitrage", '"outsourcing" India services clients revenue', "Labor arbitrage"),
+]
+
+
 def concept(R, slot: dict) -> dict:
     """One business concept a day, explained through a real company in the news.
 
     The slot lists concepts as {"name": ..., "search": optional news query}. The definition comes from
     Wikipedia, the case from a recent news story; the writer only uses what was fetched."""
-    concepts = slot.get("concepts") or []
-    if not concepts:
-        return {"items": []}
+    concepts = slot.get("concepts") or DEFAULT_CONCEPTS
     c = concepts[R.day.toordinal() % len(concepts)]
     name = c["name"] if isinstance(c, dict) else str(c)
     query = (c.get("search") if isinstance(c, dict) else None) or f'"{name}" company'
