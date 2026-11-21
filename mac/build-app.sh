@@ -41,7 +41,7 @@ if ! curl -s -o /dev/null "\$URL/"; then
 fi
 # Starts today's edition only if it doesn't exist yet
 curl -s -X POST "\$URL/generate" -o /dev/null
-open "\$URL/"
+"$PROJECT/mac/focus-or-open.sh" "\$URL/"   # reuse an open tab instead of opening another
 LAUNCHER
 chmod +x "$APP/Contents/MacOS/MorningPaper"
 

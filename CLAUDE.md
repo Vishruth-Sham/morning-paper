@@ -20,6 +20,11 @@ lsof -ti tcp:5055 | xargs kill; nohup uv run morning-paper > data-server.log 2>&
 
 Templates reload on their own; Python changes need a restart.
 
+Mac app: `mac/build-app.sh --dock` builds `~/Applications/Morning Paper.app` and pins it to the Dock. A click
+starts the server if needed, POSTs `/generate` (only makes a paper if today has none) and runs
+`mac/focus-or-open.sh`, which switches to an open paper tab (Chrome-family browsers, Safari) instead of opening
+another. Re-run the build if the project folder or `uv` moves. The reader doesn't use Terminal; run it for them.
+
 ## The writer (Claude)
 
 Story selection, briefs, the maths exercise, notebook answers and plan redrafts use Claude when one is

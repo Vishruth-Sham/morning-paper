@@ -28,6 +28,4 @@ Refer to [CLAUDE.md](CLAUDE.md).
 
 ### Mac app
 
-`mac/build-app.sh --dock` builds `~/Applications/Morning Paper.app` and pins it to the Dock.
-One click starts the server if it isn't running, makes today's edition if there isn't one yet,
-and opens the paper in the browser. Re-run the script if the project folder or `uv` moves.
+There's a Morning Paper icon in my Dock. Click it - the paper opens. If it's already open, it just jumps to that tab. Building the app is in CLAUDE.md too.
