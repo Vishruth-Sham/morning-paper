@@ -28,4 +28,4 @@ Refer to [CLAUDE.md](CLAUDE.md).
 
 ### Mac app
 
-There's a Morning Paper icon in my Dock. Click it - the paper opens. If it's already open, it just jumps to that tab. Building the app is in CLAUDE.md too.
+There's a Morning Paper icon in my Dock. Click it - the paper opens in its own window. No browser, no tabs. Building the app is in CLAUDE.md too.

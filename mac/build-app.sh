@@ -1,6 +1,6 @@
 #!/bin/bash
-# Builds "~/Applications/Morning Paper.app": one click starts the server (if needed),
-# makes today's edition if it doesn't exist yet, and opens the paper in the browser.
+# Builds "~/Applications/Morning Paper.app": its own window (no browser). One click starts the server
+# (if needed), makes today's edition if it doesn't exist yet, and shows the paper. Needs Xcode command line tools (swiftc).
 # Usage: mac/build-app.sh [--dock]
 set -euo pipefail
 PROJECT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -21,29 +21,15 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundleShortVersionString</key><string>1.0</string>
-  <key>LSUIElement</key><true/>
 </dict>
 </plist>
 PLIST
 
-cat > "$APP/Contents/MacOS/MorningPaper" <<LAUNCHER
-#!/bin/bash
-UV="$UV"
-export PATH="$(dirname "$UV"):/opt/homebrew/bin:/usr/local/bin:\$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-cd "$PROJECT" || exit 1
-URL="http://127.0.0.1:5055"
-if ! curl -s -o /dev/null "\$URL/"; then
-  nohup "\$UV" run morning-paper >> data-server.log 2>&1 &
-  for i in \$(seq 1 30); do
-    sleep 1
-    curl -s -o /dev/null "\$URL/" && break
-  done
-fi
-# Starts today's edition only if it doesn't exist yet
-curl -s -X POST "\$URL/generate" -o /dev/null
-"$PROJECT/mac/focus-or-open.sh" "\$URL/"   # reuse an open tab instead of opening another
-LAUNCHER
-chmod +x "$APP/Contents/MacOS/MorningPaper"
+# A small native window (WebKit) shows the paper: no browser, no tabs.
+rm -f "$APP/Contents/MacOS/MorningPaper"
+swiftc -O -o "$APP/Contents/MacOS/MorningPaper" "$PROJECT/mac/MorningPaper.swift" -framework Cocoa -framework WebKit
+/usr/libexec/PlistBuddy -c "Delete :MPProject" -c "Delete :MPUV" "$APP/Contents/Info.plist" 2>/dev/null || true
+/usr/libexec/PlistBuddy -c "Add :MPProject string $PROJECT" -c "Add :MPUV string $UV" "$APP/Contents/Info.plist"
 
 # Icon (optional: skipped if swift isn't available)
 TMP="$(mktemp -d)"
