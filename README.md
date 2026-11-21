@@ -25,3 +25,9 @@ with sources, not vibes.
 ## Running it
 
 Refer to [CLAUDE.md](CLAUDE.md).
+
+### Mac app
+
+`mac/build-app.sh --dock` builds `~/Applications/Morning Paper.app` and pins it to the Dock.
+One click starts the server if it isn't running, makes today's edition if there isn't one yet,
+and opens the paper in the browser. Re-run the script if the project folder or `uv` moves.
