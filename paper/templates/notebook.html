@@ -20,7 +20,6 @@
 </form>
 
 {% set pend = questions | selectattr('status', 'equalto', 'pending') | list %}
-{% set done = questions | selectattr('status', 'equalto', 'answered') | list %}
 <section class="nb-list" aria-labelledby="pend-h">
   <h2 class="side-head" id="pend-h">For tomorrow's paper</h2>
   <ul class="queue">
@@ -31,11 +30,5 @@
     <li class="legend">Nothing saved yet.</li>
     {% endfor %}
   </ul>
-  {% if done %}
-  <h2 class="side-head" style="margin-top:1.5rem">Already answered</h2>
-  <ul class="queue">
-    {% for q in done[:20] %}<li>{{ q.text }}<span class="when"><a href="{{ url_for('edition', date=q.edition_date, issue_no=q.edition_issue) }}#you-asked">In the {{ q.edition_date | nicedate }} paper</a></span></li>{% endfor %}
-  </ul>
-  {% endif %}
 </section>
 {% endblock %}
